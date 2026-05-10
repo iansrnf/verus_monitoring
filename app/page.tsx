@@ -263,7 +263,7 @@ export default function Home() {
                         <td className="mono" title={device.shares ?? ""}>
                           {device.shares || "0/0 shares"}
                         </td>
-                        <td className="mono">{device.cpu ?? 0}%</td>
+                        <td className="mono">{device.cpu ?? 0} cores</td>
                         <td className="mono" title={device.temp ?? ""}>
                           {device.temp || "-"}
                         </td>
