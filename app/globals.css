@@ -259,6 +259,26 @@ select {
   color: var(--text);
 }
 
+.clearSearch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.clearSearch:hover,
+.clearSearch:focus-visible {
+  background: var(--panel-strong);
+  color: var(--text);
+}
+
 .refresh {
   display: inline-flex;
   align-items: center;

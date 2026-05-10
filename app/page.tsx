@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Activity, RefreshCw, Save, Search, Smartphone } from "lucide-react";
+import { Activity, RefreshCw, Save, Search, Smartphone, X } from "lucide-react";
 import { miningConfigs } from "@/lib/configs";
 
 type Device = {
@@ -30,6 +30,10 @@ type ServerConfig = {
 };
 
 const STALE_DEVICE_MS = 60_000;
+const deviceNameSorter = new Intl.Collator(undefined, {
+  numeric: true,
+  sensitivity: "base",
+});
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat(undefined, {
@@ -46,6 +50,10 @@ function isDeviceOnline(device: Device, now: number) {
   }
 
   return now - updatedAt <= STALE_DEVICE_MS;
+}
+
+function getDeviceDisplayName(device: Device) {
+  return device.name?.trim() || "Unnamed phone";
 }
 
 export default function Home() {
@@ -155,24 +163,35 @@ export default function Home() {
       deviceTab === "online" ? device.computedOnline : !device.computedOnline,
     );
 
-    if (!needle) {
-      return tabDevices;
-    }
+    const searchedDevices = needle
+      ? tabDevices.filter((device) =>
+          [
+            device.id,
+            getDeviceDisplayName(device),
+            device.hash,
+            device.config,
+            device.shares,
+            device.cpu,
+            device.temp,
+            device.computedOnline ? "online" : "offline",
+          ]
+            .filter(Boolean)
+            .some((value) => String(value).toLowerCase().includes(needle)),
+        )
+      : tabDevices;
 
-    return tabDevices.filter((device) =>
-      [
-        device.id,
-        device.name,
-        device.hash,
-        device.config,
-        device.shares,
-        device.cpu,
-        device.temp,
-        device.computedOnline ? "online" : "offline",
-      ]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(needle)),
-    );
+    return [...searchedDevices].sort((firstDevice, secondDevice) => {
+      const nameComparison = deviceNameSorter.compare(
+        getDeviceDisplayName(firstDevice),
+        getDeviceDisplayName(secondDevice),
+      );
+
+      if (nameComparison !== 0) {
+        return nameComparison;
+      }
+
+      return firstDevice.id - secondDevice.id;
+    });
   }, [devicesWithStatus, deviceTab, query]);
 
   const onlineCount = devicesWithStatus.filter((device) => device.computedOnline).length;
@@ -289,9 +308,20 @@ export default function Home() {
                 <input
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Search device, hash, config, or status"
+                  placeholder="Search devices"
                   aria-label="Search devices"
                 />
+                {query ? (
+                  <button
+                    type="button"
+                    className="clearSearch"
+                    onClick={() => setQuery("")}
+                    aria-label="Clear device search"
+                    title="Clear search"
+                  >
+                    <X size={16} />
+                  </button>
+                ) : null}
               </label>
 
               <button
@@ -349,7 +379,7 @@ export default function Home() {
                   ) : filteredDevices.length === 0 ? (
                     <tr>
                       <td className="empty" colSpan={8}>
-                        No devices found.
+                        {query.trim() ? "No devices match your search." : "No devices found."}
                       </td>
                     </tr>
                   ) : (
@@ -357,7 +387,7 @@ export default function Home() {
                       <tr key={device.id}>
                         <td>
                           <div className="deviceName">
-                            <strong>{device.name || "Unnamed phone"}</strong>
+                            <strong>{getDeviceDisplayName(device)}</strong>
                             <span>
                               <Smartphone size={13} aria-hidden="true" /> ID {device.id}
                             </span>
