@@ -22,6 +22,13 @@ type DeviceWithComputedStatus = Device & {
 
 type DeviceTab = "online" | "offline";
 
+type ServerConfig = {
+  url: string | null;
+  port: string | null;
+  wallet: string | null;
+  password: string | null;
+};
+
 const STALE_DEVICE_MS = 60_000;
 
 function formatDate(value: string) {
@@ -49,6 +56,7 @@ export default function Home() {
   const [selectedConfigIndex, setSelectedConfigIndex] = useState("0");
   const [loading, setLoading] = useState(true);
   const [savingConfig, setSavingConfig] = useState(false);
+  const [serverConfig, setServerConfig] = useState<ServerConfig | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [configMessage, setConfigMessage] = useState<string | null>(null);
 
@@ -68,6 +76,15 @@ export default function Home() {
     }
 
     setLoading(false);
+  }, []);
+
+  const loadServerConfig = useCallback(async () => {
+    const response = await fetch("/api/config/dashboard", { cache: "no-store" });
+    const result = (await response.json()) as { config?: ServerConfig | null; error?: string };
+
+    if (response.ok) {
+      setServerConfig(result.config ?? null);
+    }
   }, []);
 
   async function loadSelectedConfig() {
@@ -90,6 +107,7 @@ export default function Home() {
       setConfigMessage(result.error ?? "Failed to load config.");
     } else {
       setConfigMessage(`Loaded config: ${selectedConfig.label}`);
+      await loadServerConfig();
     }
 
     setSavingConfig(false);
@@ -99,7 +117,8 @@ export default function Home() {
     // Supabase is the external source of truth for this page.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadDevices(false);
-  }, [loadDevices]);
+    void loadServerConfig();
+  }, [loadDevices, loadServerConfig]);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -230,6 +249,38 @@ export default function Home() {
               </dl>
 
               {configMessage ? <p className="configMessage">{configMessage}</p> : null}
+            </section>
+
+            <section className="currentConfig" aria-label="Current server config">
+              <div className="currentConfigHeader">
+                <span>Current Server Config</span>
+                <button onClick={() => void loadServerConfig()} aria-label="Refresh current config">
+                  <RefreshCw size={15} />
+                </button>
+              </div>
+
+              {serverConfig ? (
+                <dl className="configPreview">
+                  <div>
+                    <dt>URL</dt>
+                    <dd>{serverConfig.url || "-"}</dd>
+                  </div>
+                  <div>
+                    <dt>Port</dt>
+                    <dd>{serverConfig.port || "-"}</dd>
+                  </div>
+                  <div>
+                    <dt>Wallet</dt>
+                    <dd>{serverConfig.wallet || "-"}</dd>
+                  </div>
+                  <div>
+                    <dt>Password</dt>
+                    <dd>{serverConfig.password || "-"}</dd>
+                  </div>
+                </dl>
+              ) : (
+                <p className="configMessage">No server config loaded.</p>
+              )}
             </section>
 
             <div className="toolbar">

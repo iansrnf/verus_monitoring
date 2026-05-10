@@ -101,6 +101,46 @@ select {
   margin-bottom: 14px;
 }
 
+.currentConfig {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 14px;
+}
+
+.currentConfigHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.currentConfigHeader span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.currentConfigHeader button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--line);
+  background: var(--panel-strong);
+  color: var(--text);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.currentConfigHeader button:hover {
+  border-color: var(--accent);
+}
+
 .configControls {
   display: flex;
   align-items: end;
