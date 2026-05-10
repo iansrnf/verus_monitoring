@@ -11,6 +11,8 @@ type Device = {
   hash: string | null;
   config: string | null;
   shares: string | null;
+  cpu: number | null;
+  temp: string | null;
   status: boolean | null;
 };
 
@@ -97,7 +99,16 @@ export default function Home() {
     }
 
     return devices.filter((device) =>
-      [device.id, device.name, device.hash, device.config, device.shares, device.status ? "online" : "offline"]
+      [
+        device.id,
+        device.name,
+        device.hash,
+        device.config,
+        device.shares,
+        device.cpu,
+        device.temp,
+        device.status ? "online" : "offline",
+      ]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(needle)),
     );
@@ -210,6 +221,8 @@ export default function Home() {
                     <th>Status</th>
                     <th>Hash</th>
                     <th>Shares</th>
+                    <th>CPU</th>
+                    <th>Temp</th>
                     <th>Config</th>
                     <th>Created</th>
                   </tr>
@@ -217,13 +230,13 @@ export default function Home() {
                 <tbody>
                   {loading ? (
                     <tr>
-                      <td className="empty" colSpan={6}>
+                      <td className="empty" colSpan={8}>
                         Loading devices...
                       </td>
                     </tr>
                   ) : filteredDevices.length === 0 ? (
                     <tr>
-                      <td className="empty" colSpan={6}>
+                      <td className="empty" colSpan={8}>
                         No devices found.
                       </td>
                     </tr>
@@ -249,6 +262,10 @@ export default function Home() {
                         </td>
                         <td className="mono" title={device.shares ?? ""}>
                           {device.shares || "0/0 shares"}
+                        </td>
+                        <td className="mono">{device.cpu ?? 0}%</td>
+                        <td className="mono" title={device.temp ?? ""}>
+                          {device.temp || "-"}
                         </td>
                         <td className="config" title={device.config ?? ""}>
                           <Activity size={14} aria-hidden="true" /> {device.config || "-"}

@@ -8,6 +8,8 @@ type DeviceStatusRequest = {
   hash?: unknown;
   config?: unknown;
   shares?: unknown;
+  cpu?: unknown;
+  temp?: unknown;
 };
 
 export async function POST(request: Request) {
@@ -35,6 +37,8 @@ export async function POST(request: Request) {
     hash: typeof body.hash === "string" ? body.hash : "",
     config: typeof body.config === "string" ? body.config : "",
     shares: typeof body.shares === "string" ? body.shares : "",
+    cpu: typeof body.cpu === "number" && Number.isFinite(body.cpu) ? Math.round(body.cpu) : 0,
+    temp: typeof body.temp === "string" ? body.temp : "",
     created_at: new Date().toISOString(),
   };
 

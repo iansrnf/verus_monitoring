@@ -11,7 +11,7 @@ export async function GET() {
 
   const { data, error } = await supabaseAdmin
     .from("device")
-    .select("id, created_at, name, hash, config, shares, status")
+    .select("id, created_at, name, hash, config, shares, cpu, temp, status")
     .order("created_at", { ascending: false });
 
   if (error) {
