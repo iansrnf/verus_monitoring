@@ -1,0 +1,38 @@
+{
+  "name": "monitoring-webapp",
+  "version": "1.0.0",
+  "description": "",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build --webpack",
+    "start": "next start",
+    "lint": "eslint"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/iansrnf/verus_monitoring.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.105.4",
+    "lucide-react": "^1.14.0",
+    "next": "^16.2.6",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.2",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "eslint": "^9.39.4",
+    "eslint-config-next": "^16.2.6",
+    "typescript": "^6.0.3"
+  },
+  "bugs": {
+    "url": "https://github.com/iansrnf/verus_monitoring/issues"
+  },
+  "homepage": "https://github.com/iansrnf/verus_monitoring#readme"
+}
