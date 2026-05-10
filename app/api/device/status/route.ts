@@ -7,6 +7,7 @@ type DeviceStatusRequest = {
   status?: unknown;
   hash?: unknown;
   config?: unknown;
+  shares?: unknown;
 };
 
 export async function POST(request: Request) {
@@ -33,6 +34,7 @@ export async function POST(request: Request) {
     status: Boolean(body.status),
     hash: typeof body.hash === "string" ? body.hash : "",
     config: typeof body.config === "string" ? body.config : "",
+    shares: typeof body.shares === "string" ? body.shares : "",
     created_at: new Date().toISOString(),
   };
 

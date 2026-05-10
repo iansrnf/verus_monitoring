@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Activity, RefreshCw, Save, Search, Smartphone } from "lucide-react";
 import { miningConfigs } from "@/lib/configs";
-import { hasSupabaseConfig, supabase } from "@/lib/supabase";
 
 type Device = {
   id: number;
@@ -11,13 +10,14 @@ type Device = {
   name: string | null;
   hash: string | null;
   config: string | null;
+  shares: string | null;
   status: boolean | null;
 };
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat(undefined, {
     dateStyle: "medium",
-    timeStyle: "short",
+    timeStyle: "medium",
   }).format(new Date(value));
 }
 
@@ -31,24 +31,18 @@ export default function Home() {
   const [configMessage, setConfigMessage] = useState<string | null>(null);
 
   const loadDevices = useCallback(async (showLoading = true) => {
-    if (!supabase) {
-      return;
-    }
-
     if (showLoading) {
       setLoading(true);
     }
 
-    const { data, error: loadError } = await supabase
-      .from("device")
-      .select("id, created_at, name, hash, config, status")
-      .order("created_at", { ascending: false });
+    const response = await fetch("/api/devices", { cache: "no-store" });
+    const result = (await response.json()) as { devices?: Device[]; error?: string };
 
-    if (loadError) {
-      setError(loadError.message);
+    if (!response.ok) {
+      setError(result.error ?? "Failed to load devices.");
     } else {
       setError(null);
-      setDevices(data ?? []);
+      setDevices(result.devices ?? []);
     }
 
     setLoading(false);
@@ -86,25 +80,12 @@ export default function Home() {
   }, [loadDevices]);
 
   useEffect(() => {
-    const client = supabase;
-
-    if (!client) {
-      return;
-    }
-
-    const channel = client
-      .channel("device-dashboard")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "device" },
-        () => {
-          void loadDevices(false);
-        },
-      )
-      .subscribe();
+    const interval = window.setInterval(() => {
+      void loadDevices(false);
+    }, 5000);
 
     return () => {
-      client.removeChannel(channel);
+      window.clearInterval(interval);
     };
   }, [loadDevices]);
 
@@ -116,7 +97,7 @@ export default function Home() {
     }
 
     return devices.filter((device) =>
-      [device.id, device.name, device.hash, device.config, device.status ? "online" : "offline"]
+      [device.id, device.name, device.hash, device.config, device.shares, device.status ? "online" : "offline"]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(needle)),
     );
@@ -150,12 +131,7 @@ export default function Home() {
           </div>
         </header>
 
-        {!hasSupabaseConfig ? (
-          <div className="notice">
-            Add your Supabase values to `.env.local`, then restart the dev server.
-          </div>
-        ) : (
-          <>
+        <>
             <section className="configPanel" aria-label="Mining config loader">
               <div className="configControls">
                 <label className="selectWrap">
@@ -233,6 +209,7 @@ export default function Home() {
                     <th>Device</th>
                     <th>Status</th>
                     <th>Hash</th>
+                    <th>Shares</th>
                     <th>Config</th>
                     <th>Created</th>
                   </tr>
@@ -240,13 +217,13 @@ export default function Home() {
                 <tbody>
                   {loading ? (
                     <tr>
-                      <td className="empty" colSpan={5}>
+                      <td className="empty" colSpan={6}>
                         Loading devices...
                       </td>
                     </tr>
                   ) : filteredDevices.length === 0 ? (
                     <tr>
-                      <td className="empty" colSpan={5}>
+                      <td className="empty" colSpan={6}>
                         No devices found.
                       </td>
                     </tr>
@@ -270,6 +247,9 @@ export default function Home() {
                         <td className="mono" title={device.hash ?? ""}>
                           {device.hash || "-"}
                         </td>
+                        <td className="mono" title={device.shares ?? ""}>
+                          {device.shares || "0/0 shares"}
+                        </td>
                         <td className="config" title={device.config ?? ""}>
                           <Activity size={14} aria-hidden="true" /> {device.config || "-"}
                         </td>
@@ -280,8 +260,7 @@ export default function Home() {
                 </tbody>
               </table>
             </section>
-          </>
-        )}
+        </>
       </div>
     </main>
   );
