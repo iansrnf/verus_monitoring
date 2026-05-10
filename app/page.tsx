@@ -16,6 +16,14 @@ type Device = {
   status: boolean | null;
 };
 
+type DeviceWithComputedStatus = Device & {
+  computedOnline: boolean;
+};
+
+type DeviceTab = "online" | "offline";
+
+const STALE_DEVICE_MS = 60_000;
+
 function formatDate(value: string) {
   return new Intl.DateTimeFormat(undefined, {
     dateStyle: "medium",
@@ -23,9 +31,21 @@ function formatDate(value: string) {
   }).format(new Date(value));
 }
 
+function isDeviceOnline(device: Device, now: number) {
+  const updatedAt = new Date(device.created_at).getTime();
+
+  if (!device.status || Number.isNaN(updatedAt)) {
+    return false;
+  }
+
+  return now - updatedAt <= STALE_DEVICE_MS;
+}
+
 export default function Home() {
   const [devices, setDevices] = useState<Device[]>([]);
   const [query, setQuery] = useState("");
+  const [deviceTab, setDeviceTab] = useState<DeviceTab>("online");
+  const [now, setNow] = useState(() => Date.now());
   const [selectedConfigIndex, setSelectedConfigIndex] = useState("0");
   const [loading, setLoading] = useState(true);
   const [savingConfig, setSavingConfig] = useState(false);
@@ -91,14 +111,36 @@ export default function Home() {
     };
   }, [loadDevices]);
 
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setNow(Date.now());
+    }, 1000);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, []);
+
+  const devicesWithStatus = useMemo<DeviceWithComputedStatus[]>(
+    () =>
+      devices.map((device) => ({
+        ...device,
+        computedOnline: isDeviceOnline(device, now),
+      })),
+    [devices, now],
+  );
+
   const filteredDevices = useMemo(() => {
     const needle = query.trim().toLowerCase();
+    const tabDevices = devicesWithStatus.filter((device) =>
+      deviceTab === "online" ? device.computedOnline : !device.computedOnline,
+    );
 
     if (!needle) {
-      return devices;
+      return tabDevices;
     }
 
-    return devices.filter((device) =>
+    return tabDevices.filter((device) =>
       [
         device.id,
         device.name,
@@ -107,14 +149,14 @@ export default function Home() {
         device.shares,
         device.cpu,
         device.temp,
-        device.status ? "online" : "offline",
+        device.computedOnline ? "online" : "offline",
       ]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(needle)),
     );
-  }, [devices, query]);
+  }, [devicesWithStatus, deviceTab, query]);
 
-  const onlineCount = devices.filter((device) => device.status).length;
+  const onlineCount = devicesWithStatus.filter((device) => device.computedOnline).length;
   const offlineCount = devices.length - onlineCount;
 
   return (
@@ -211,6 +253,25 @@ export default function Home() {
               </button>
             </div>
 
+            <div className="tabs" role="tablist" aria-label="Device status">
+              <button
+                className={`tab ${deviceTab === "online" ? "active" : ""}`}
+                onClick={() => setDeviceTab("online")}
+                role="tab"
+                aria-selected={deviceTab === "online"}
+              >
+                Online {onlineCount}
+              </button>
+              <button
+                className={`tab ${deviceTab === "offline" ? "active" : ""}`}
+                onClick={() => setDeviceTab("offline")}
+                role="tab"
+                aria-selected={deviceTab === "offline"}
+              >
+                Offline {offlineCount}
+              </button>
+            </div>
+
             {error ? <div className="notice">{error}</div> : null}
 
             <section className="tableWrap" aria-label="Devices">
@@ -252,9 +313,9 @@ export default function Home() {
                           </div>
                         </td>
                         <td>
-                          <span className={`status ${device.status ? "online" : "offline"}`}>
+                          <span className={`status ${device.computedOnline ? "online" : "offline"}`}>
                             <span className="dot" aria-hidden="true" />
-                            {device.status ? "Online" : "Offline"}
+                            {device.computedOnline ? "Online" : "Offline"}
                           </span>
                         </td>
                         <td className="mono" title={device.hash ?? ""}>

@@ -236,6 +236,36 @@ select {
   border-color: var(--accent);
 }
 
+.tabs {
+  display: inline-flex;
+  gap: 6px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  border-radius: 8px;
+  padding: 5px;
+  margin-bottom: 14px;
+}
+
+.tab {
+  min-height: 36px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  border-radius: 6px;
+  padding: 0 14px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.tab.active {
+  background: var(--panel-strong);
+  color: var(--text);
+}
+
+.tab:hover {
+  color: var(--text);
+}
+
 .tableWrap {
   overflow: hidden;
   border: 1px solid var(--line);
@@ -359,6 +389,6 @@ tr:last-child td {
   }
 
   table {
-    min-width: 820px;
+    min-width: 980px;
   }
 }
