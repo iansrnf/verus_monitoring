@@ -12,6 +12,18 @@ type DeviceStatusRequest = {
   temp?: unknown;
 };
 
+function stringifyMetric(value: unknown) {
+  if (typeof value === "string") {
+    return value.trim();
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(value);
+  }
+
+  return "";
+}
+
 export async function POST(request: Request) {
   if (!isAuthorizedConfigRequest(request)) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
@@ -34,11 +46,11 @@ export async function POST(request: Request) {
   const payload = {
     name,
     status: Boolean(body.status),
-    hash: typeof body.hash === "string" ? body.hash : "",
+    hash: stringifyMetric(body.hash),
     config: typeof body.config === "string" ? body.config : "",
-    shares: typeof body.shares === "string" ? body.shares : "",
+    shares: stringifyMetric(body.shares),
     cpu: typeof body.cpu === "number" && Number.isFinite(body.cpu) ? Math.round(body.cpu) : 0,
-    temp: typeof body.temp === "string" ? body.temp : "",
+    temp: stringifyMetric(body.temp),
     created_at: new Date().toISOString(),
   };
 

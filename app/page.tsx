@@ -125,13 +125,34 @@ function getHashRateValue(value: string | null) {
     return null;
   }
 
-  const hashRate = Number(normalizedValue);
+  const numericMatch = normalizedValue.match(/-?\d+(\.\d+)?/);
 
-  if (!Number.isFinite(hashRate)) {
+  if (!numericMatch) {
     return null;
   }
 
-  return hashRate;
+  const numericValue = Number(numericMatch[0]);
+
+  if (!Number.isFinite(numericValue)) {
+    return null;
+  }
+
+  const unitMatch = normalizedValue.match(/\b([kmg])h\/?s\b/i);
+  const unit = unitMatch?.[1]?.toLowerCase();
+
+  if (unit === "g") {
+    return numericValue * 1_000_000_000;
+  }
+
+  if (unit === "m") {
+    return numericValue * 1_000_000;
+  }
+
+  if (unit === "k") {
+    return numericValue * 1_000;
+  }
+
+  return numericValue;
 }
 
 function getNumberFromText(value: string | null) {
