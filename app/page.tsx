@@ -18,9 +18,11 @@ type Device = {
 
 type DeviceWithComputedStatus = Device & {
   computedOnline: boolean;
+  lastSeenAt: number | null;
+  statusLabel: string;
 };
 
-type DeviceTab = "online" | "offline";
+type DeviceTab = "online" | "offline" | "recent";
 
 type ServerConfig = {
   url: string | null;
@@ -30,6 +32,7 @@ type ServerConfig = {
 };
 
 const STALE_DEVICE_MS = 60_000;
+const RECENT_OFFLINE_MS = 24 * 60 * 60 * 1000;
 const deviceNameSorter = new Intl.Collator(undefined, {
   numeric: true,
   sensitivity: "base",
@@ -50,6 +53,39 @@ function isDeviceOnline(device: Device, now: number) {
   }
 
   return now - updatedAt <= STALE_DEVICE_MS;
+}
+
+function getDeviceLastSeenAt(device: Device) {
+  const lastSeenAt = new Date(device.created_at).getTime();
+
+  return Number.isNaN(lastSeenAt) ? null : lastSeenAt;
+}
+
+function formatRelativeTime(from: number | null, now: number) {
+  if (from === null) {
+    return "unknown time ago";
+  }
+
+  const elapsedSeconds = Math.max(0, Math.floor((now - from) / 1000));
+
+  if (elapsedSeconds < 60) {
+    return "just now";
+  }
+
+  const units = [
+    { label: "day", seconds: 86_400 },
+    { label: "hour", seconds: 3_600 },
+    { label: "minute", seconds: 60 },
+  ];
+
+  const unit = units.find((item) => elapsedSeconds >= item.seconds) ?? units[units.length - 1];
+  const value = Math.floor(elapsedSeconds / unit.seconds);
+
+  return `${value} ${unit.label}${value === 1 ? "" : "s"} ago`;
+}
+
+function isRecentlyOffline(device: DeviceWithComputedStatus, now: number) {
+  return !device.computedOnline && device.lastSeenAt !== null && now - device.lastSeenAt <= RECENT_OFFLINE_MS;
 }
 
 function getDeviceDisplayName(device: Device) {
@@ -150,18 +186,33 @@ export default function Home() {
 
   const devicesWithStatus = useMemo<DeviceWithComputedStatus[]>(
     () =>
-      devices.map((device) => ({
-        ...device,
-        computedOnline: isDeviceOnline(device, now),
-      })),
+      devices.map((device) => {
+        const computedOnline = isDeviceOnline(device, now);
+        const lastSeenAt = getDeviceLastSeenAt(device);
+
+        return {
+          ...device,
+          computedOnline,
+          lastSeenAt,
+          statusLabel: computedOnline ? "Online" : `offline ${formatRelativeTime(lastSeenAt, now)}`,
+        };
+      }),
     [devices, now],
   );
 
   const filteredDevices = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    const tabDevices = devicesWithStatus.filter((device) =>
-      deviceTab === "online" ? device.computedOnline : !device.computedOnline,
-    );
+    const tabDevices = devicesWithStatus.filter((device) => {
+      if (deviceTab === "online") {
+        return device.computedOnline;
+      }
+
+      if (deviceTab === "recent") {
+        return isRecentlyOffline(device, now);
+      }
+
+      return !device.computedOnline;
+    });
 
     const searchedDevices = needle
       ? tabDevices.filter((device) =>
@@ -173,7 +224,7 @@ export default function Home() {
             device.shares,
             device.cpu,
             device.temp,
-            device.computedOnline ? "online" : "offline",
+            device.statusLabel,
           ]
             .filter(Boolean)
             .some((value) => String(value).toLowerCase().includes(needle)),
@@ -192,10 +243,11 @@ export default function Home() {
 
       return firstDevice.id - secondDevice.id;
     });
-  }, [devicesWithStatus, deviceTab, query]);
+  }, [devicesWithStatus, deviceTab, now, query]);
 
   const onlineCount = devicesWithStatus.filter((device) => device.computedOnline).length;
   const offlineCount = devices.length - onlineCount;
+  const recentOfflineCount = devicesWithStatus.filter((device) => isRecentlyOffline(device, now)).length;
 
   return (
     <main className="page">
@@ -351,6 +403,14 @@ export default function Home() {
               >
                 Offline {offlineCount}
               </button>
+              <button
+                className={`tab ${deviceTab === "recent" ? "active" : ""}`}
+                onClick={() => setDeviceTab("recent")}
+                role="tab"
+                aria-selected={deviceTab === "recent"}
+              >
+                Recent {recentOfflineCount}
+              </button>
             </div>
 
             {error ? <div className="notice">{error}</div> : null}
@@ -396,7 +456,7 @@ export default function Home() {
                         <td>
                           <span className={`status ${device.computedOnline ? "online" : "offline"}`}>
                             <span className="dot" aria-hidden="true" />
-                            {device.computedOnline ? "Online" : "Offline"}
+                            {device.statusLabel}
                           </span>
                         </td>
                         <td className="mono" title={device.hash ?? ""}>
