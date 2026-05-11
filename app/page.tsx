@@ -118,6 +118,10 @@ function formatHashRate(value: string | null) {
   return `${hashRateFormatter.format(hashRate)} H/s`;
 }
 
+function formatHashRateValue(hashRate: number) {
+  return formatHashRate(String(hashRate));
+}
+
 function getHashRateValue(value: string | null) {
   const normalizedValue = value?.trim().replace(/,/g, "");
 
@@ -392,6 +396,13 @@ export default function Home() {
   const onlineCount = devicesWithStatus.filter((device) => device.computedOnline).length;
   const offlineCount = devices.length - onlineCount;
   const recentOfflineCount = devicesWithStatus.filter((device) => isRecentlyOffline(device, now)).length;
+  const onlineHashTotal = devicesWithStatus.reduce((total, device) => {
+    if (!device.computedOnline) {
+      return total;
+    }
+
+    return total + (getHashRateValue(device.hash) ?? 0);
+  }, 0);
 
   return (
     <main className="page">
@@ -414,6 +425,10 @@ export default function Home() {
             <div className="metric">
               <span>Offline</span>
               <strong>{offlineCount}</strong>
+            </div>
+            <div className="metric">
+              <span>Total Hash</span>
+              <strong>{formatHashRateValue(onlineHashTotal)}</strong>
             </div>
           </div>
         </header>

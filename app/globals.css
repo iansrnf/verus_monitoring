@@ -60,9 +60,9 @@ select {
 
 .summary {
   display: grid;
-  grid-template-columns: repeat(3, minmax(120px, 1fr));
+  grid-template-columns: repeat(4, minmax(120px, 1fr));
   gap: 10px;
-  width: min(420px, 100%);
+  width: min(620px, 100%);
 }
 
 .metric {
@@ -83,6 +83,7 @@ select {
   display: block;
   margin-top: 7px;
   font-size: 26px;
+  white-space: nowrap;
 }
 
 .toolbar {
