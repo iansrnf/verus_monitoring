@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Activity, RefreshCw, Save, Search, Smartphone, X } from "lucide-react";
+import { Activity, ArrowDown, ArrowUp, ArrowUpDown, RefreshCw, Save, Search, Smartphone, X } from "lucide-react";
 import { miningConfigs } from "@/lib/configs";
 
 type Device = {
@@ -23,6 +23,13 @@ type DeviceWithComputedStatus = Device & {
 };
 
 type DeviceTab = "online" | "offline" | "recent";
+type SortDirection = "asc" | "desc";
+type SortKey = "device" | "status" | "hash" | "shares" | "cpu" | "temp" | "config" | "created";
+
+type SortState = {
+  key: SortKey;
+  direction: SortDirection;
+};
 
 type ServerConfig = {
   url: string | null;
@@ -36,6 +43,9 @@ const RECENT_OFFLINE_MS = 24 * 60 * 60 * 1000;
 const deviceNameSorter = new Intl.Collator(undefined, {
   numeric: true,
   sensitivity: "base",
+});
+const hashRateFormatter = new Intl.NumberFormat(undefined, {
+  maximumFractionDigits: 2,
 });
 
 function formatDate(value: string) {
@@ -84,6 +94,104 @@ function formatRelativeTime(from: number | null, now: number) {
   return `${value} ${unit.label}${value === 1 ? "" : "s"} ago`;
 }
 
+function formatHashRate(value: string | null) {
+  const hashRate = getHashRateValue(value);
+
+  if (hashRate === null) {
+    return "-";
+  }
+
+  const digitCount = Math.floor(Math.abs(hashRate)).toString().length;
+
+  if (digitCount >= 10) {
+    return `${hashRateFormatter.format(hashRate / 1_000_000_000)} GH/s`;
+  }
+
+  if (digitCount >= 7) {
+    return `${hashRateFormatter.format(hashRate / 1_000_000)} MH/s`;
+  }
+
+  if (digitCount >= 4) {
+    return `${hashRateFormatter.format(hashRate / 1_000)} KH/s`;
+  }
+
+  return `${hashRateFormatter.format(hashRate)} H/s`;
+}
+
+function getHashRateValue(value: string | null) {
+  const normalizedValue = value?.trim().replace(/,/g, "");
+
+  if (!normalizedValue) {
+    return null;
+  }
+
+  const hashRate = Number(normalizedValue);
+
+  if (!Number.isFinite(hashRate)) {
+    return null;
+  }
+
+  return hashRate;
+}
+
+function getNumberFromText(value: string | null) {
+  const match = value?.replace(/,/g, "").match(/-?\d+(\.\d+)?/);
+
+  if (!match) {
+    return null;
+  }
+
+  const numericValue = Number(match[0]);
+
+  return Number.isFinite(numericValue) ? numericValue : null;
+}
+
+function compareText(firstValue: string | null, secondValue: string | null) {
+  return deviceNameSorter.compare(firstValue?.trim() || "", secondValue?.trim() || "");
+}
+
+function compareNumbers(firstValue: number | null, secondValue: number | null) {
+  if (firstValue === null && secondValue === null) {
+    return 0;
+  }
+
+  if (firstValue === null) {
+    return 1;
+  }
+
+  if (secondValue === null) {
+    return -1;
+  }
+
+  return firstValue - secondValue;
+}
+
+function compareDevices(firstDevice: DeviceWithComputedStatus, secondDevice: DeviceWithComputedStatus, key: SortKey) {
+  switch (key) {
+    case "device":
+      return compareText(getDeviceDisplayName(firstDevice), getDeviceDisplayName(secondDevice));
+    case "status":
+      return Number(firstDevice.computedOnline) - Number(secondDevice.computedOnline);
+    case "hash":
+      return compareNumbers(getHashRateValue(firstDevice.hash), getHashRateValue(secondDevice.hash));
+    case "shares":
+      return compareText(firstDevice.shares, secondDevice.shares);
+    case "cpu":
+      return compareNumbers(firstDevice.cpu ?? null, secondDevice.cpu ?? null);
+    case "temp": {
+      const numericComparison = compareNumbers(getNumberFromText(firstDevice.temp), getNumberFromText(secondDevice.temp));
+
+      return numericComparison || compareText(firstDevice.temp, secondDevice.temp);
+    }
+    case "config":
+      return compareText(firstDevice.config, secondDevice.config);
+    case "created":
+      return compareNumbers(firstDevice.lastSeenAt, secondDevice.lastSeenAt);
+    default:
+      return 0;
+  }
+}
+
 function isRecentlyOffline(device: DeviceWithComputedStatus, now: number) {
   return !device.computedOnline && device.lastSeenAt !== null && now - device.lastSeenAt <= RECENT_OFFLINE_MS;
 }
@@ -96,6 +204,7 @@ export default function Home() {
   const [devices, setDevices] = useState<Device[]>([]);
   const [query, setQuery] = useState("");
   const [deviceTab, setDeviceTab] = useState<DeviceTab>("online");
+  const [sort, setSort] = useState<SortState>({ key: "device", direction: "asc" });
   const [now, setNow] = useState(() => Date.now());
   const [selectedConfigIndex, setSelectedConfigIndex] = useState("0");
   const [loading, setLoading] = useState(true);
@@ -155,6 +264,25 @@ export default function Home() {
     }
 
     setSavingConfig(false);
+  }
+
+  function toggleSort(key: SortKey) {
+    setSort((currentSort) => ({
+      key,
+      direction: currentSort.key === key && currentSort.direction === "asc" ? "desc" : "asc",
+    }));
+  }
+
+  function renderSortIcon(key: SortKey) {
+    if (sort.key !== key) {
+      return <ArrowUpDown size={14} aria-hidden="true" />;
+    }
+
+    return sort.direction === "asc" ? (
+      <ArrowUp size={14} aria-hidden="true" />
+    ) : (
+      <ArrowDown size={14} aria-hidden="true" />
+    );
   }
 
   useEffect(() => {
@@ -220,6 +348,7 @@ export default function Home() {
             device.id,
             getDeviceDisplayName(device),
             device.hash,
+            formatHashRate(device.hash),
             device.config,
             device.shares,
             device.cpu,
@@ -232,18 +361,12 @@ export default function Home() {
       : tabDevices;
 
     return [...searchedDevices].sort((firstDevice, secondDevice) => {
-      const nameComparison = deviceNameSorter.compare(
-        getDeviceDisplayName(firstDevice),
-        getDeviceDisplayName(secondDevice),
-      );
+      const comparison = compareDevices(firstDevice, secondDevice, sort.key);
+      const directionMultiplier = sort.direction === "asc" ? 1 : -1;
 
-      if (nameComparison !== 0) {
-        return nameComparison;
-      }
-
-      return firstDevice.id - secondDevice.id;
+      return comparison ? comparison * directionMultiplier : firstDevice.id - secondDevice.id;
     });
-  }, [devicesWithStatus, deviceTab, now, query]);
+  }, [devicesWithStatus, deviceTab, now, query, sort]);
 
   const onlineCount = devicesWithStatus.filter((device) => device.computedOnline).length;
   const offlineCount = devices.length - onlineCount;
@@ -419,14 +542,46 @@ export default function Home() {
               <table>
                 <thead>
                   <tr>
-                    <th>Device</th>
-                    <th>Status</th>
-                    <th>Hash</th>
-                    <th>Shares</th>
-                    <th>CPU</th>
-                    <th>Temp</th>
-                    <th>Config</th>
-                    <th>Created</th>
+                    <th aria-sort={sort.key === "device" ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}>
+                      <button className="sortHeader" onClick={() => toggleSort("device")} type="button">
+                        Device {renderSortIcon("device")}
+                      </button>
+                    </th>
+                    <th aria-sort={sort.key === "status" ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}>
+                      <button className="sortHeader" onClick={() => toggleSort("status")} type="button">
+                        Status {renderSortIcon("status")}
+                      </button>
+                    </th>
+                    <th aria-sort={sort.key === "hash" ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}>
+                      <button className="sortHeader" onClick={() => toggleSort("hash")} type="button">
+                        Hash {renderSortIcon("hash")}
+                      </button>
+                    </th>
+                    <th aria-sort={sort.key === "shares" ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}>
+                      <button className="sortHeader" onClick={() => toggleSort("shares")} type="button">
+                        Shares {renderSortIcon("shares")}
+                      </button>
+                    </th>
+                    <th aria-sort={sort.key === "cpu" ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}>
+                      <button className="sortHeader" onClick={() => toggleSort("cpu")} type="button">
+                        CPU {renderSortIcon("cpu")}
+                      </button>
+                    </th>
+                    <th aria-sort={sort.key === "temp" ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}>
+                      <button className="sortHeader" onClick={() => toggleSort("temp")} type="button">
+                        Temp {renderSortIcon("temp")}
+                      </button>
+                    </th>
+                    <th aria-sort={sort.key === "config" ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}>
+                      <button className="sortHeader" onClick={() => toggleSort("config")} type="button">
+                        Config {renderSortIcon("config")}
+                      </button>
+                    </th>
+                    <th aria-sort={sort.key === "created" ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}>
+                      <button className="sortHeader" onClick={() => toggleSort("created")} type="button">
+                        Created {renderSortIcon("created")}
+                      </button>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -460,7 +615,7 @@ export default function Home() {
                           </span>
                         </td>
                         <td className="mono" title={device.hash ?? ""}>
-                          {device.hash || "-"}
+                          {formatHashRate(device.hash)}
                         </td>
                         <td className="mono" title={device.shares ?? ""}>
                           {device.shares || "0/0 shares"}
