@@ -8,6 +8,7 @@ import {
   ArrowUp,
   ArrowUpDown,
   Clock3,
+  Download,
   RefreshCw,
   Save,
   Search,
@@ -15,6 +16,8 @@ import {
   Wifi,
   WifiOff,
   X,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 import { miningConfigs } from "@/lib/configs";
 
@@ -51,6 +54,12 @@ type ServerConfig = {
   port: string | null;
   wallet: string | null;
   password: string | null;
+};
+
+type ScreenshotPreview = {
+  src: string;
+  deviceName: string;
+  createdAt: string | null;
 };
 
 const STALE_DEVICE_MS = 60_000;
@@ -255,6 +264,13 @@ function getDeviceDisplayName(device: Device) {
   return device.name?.trim() || "Unnamed phone";
 }
 
+function getScreenshotFileName(preview: ScreenshotPreview) {
+  const deviceName = preview.deviceName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "device";
+  const timestamp = preview.createdAt ? new Date(preview.createdAt).toISOString().replace(/[:.]/g, "-") : "latest";
+
+  return `${deviceName}-${timestamp}.png`;
+}
+
 function getAppPath(path: string) {
   return `${APP_BASE_PATH}${path}`;
 }
@@ -303,6 +319,8 @@ export default function Home() {
   const [serverConfig, setServerConfig] = useState<ServerConfig | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [configMessage, setConfigMessage] = useState<string | null>(null);
+  const [screenshotPreview, setScreenshotPreview] = useState<ScreenshotPreview | null>(null);
+  const [screenshotZoom, setScreenshotZoom] = useState(1);
 
   const loadDevices = useCallback(async (showLoading = true) => {
     if (showLoading) {
@@ -376,6 +394,32 @@ export default function Home() {
     );
   }
 
+  function openScreenshotPreview(device: Device) {
+    if (!device.screen_shot) {
+      return;
+    }
+
+    setScreenshotPreview({
+      src: device.screen_shot,
+      deviceName: getDeviceDisplayName(device),
+      createdAt: device.created_at,
+    });
+    setScreenshotZoom(1);
+  }
+
+  function closeScreenshotPreview() {
+    setScreenshotPreview(null);
+    setScreenshotZoom(1);
+  }
+
+  function zoomScreenshot(direction: "in" | "out") {
+    setScreenshotZoom((currentZoom) => {
+      const nextZoom = direction === "in" ? currentZoom + 0.25 : currentZoom - 0.25;
+
+      return Math.min(3, Math.max(0.5, Number(nextZoom.toFixed(2))));
+    });
+  }
+
   useEffect(() => {
     // The database is the external source of truth for this page.
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -402,6 +446,24 @@ export default function Home() {
       window.clearInterval(interval);
     };
   }, []);
+
+  useEffect(() => {
+    if (!screenshotPreview) {
+      return;
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        closeScreenshotPreview();
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [screenshotPreview]);
 
   const devicesWithStatus = useMemo<DeviceWithComputedStatus[]>(
     () =>
@@ -746,7 +808,13 @@ export default function Home() {
                         </td>
                         <td>
                           {device.screen_shot ? (
-                            <a className="screenshotLink" href={device.screen_shot} target="_blank" rel="noreferrer">
+                            <button
+                              className="screenshotButton"
+                              type="button"
+                              onClick={() => openScreenshotPreview(device)}
+                              title={`Open ${getDeviceDisplayName(device)} screenshot`}
+                              aria-label={`Open ${getDeviceDisplayName(device)} screenshot`}
+                            >
                               <Image
                                 src={device.screen_shot}
                                 alt={`${getDeviceDisplayName(device)} screenshot`}
@@ -754,7 +822,7 @@ export default function Home() {
                                 height={44}
                                 unoptimized
                               />
-                            </a>
+                            </button>
                           ) : (
                             <span className="muted">-</span>
                           )}
@@ -768,6 +836,67 @@ export default function Home() {
             </section>
         </>
       </div>
+
+      {screenshotPreview ? (
+        <div className="screenshotModal" role="dialog" aria-modal="true" aria-label={`${screenshotPreview.deviceName} screenshot`}>
+          <button className="screenshotBackdrop" type="button" aria-label="Close screenshot" onClick={closeScreenshotPreview} />
+          <div className="screenshotDialog">
+            <div className="screenshotModalBar">
+              <div className="screenshotTitle">
+                <strong>{screenshotPreview.deviceName}</strong>
+                <span>{formatDate(screenshotPreview.createdAt)}</span>
+              </div>
+
+              <div className="screenshotActions">
+                <button
+                  type="button"
+                  onClick={() => zoomScreenshot("out")}
+                  disabled={screenshotZoom <= 0.5}
+                  aria-label="Zoom out"
+                  title="Zoom out"
+                >
+                  <ZoomOut size={18} />
+                </button>
+                <span className="zoomValue">{Math.round(screenshotZoom * 100)}%</span>
+                <button
+                  type="button"
+                  onClick={() => zoomScreenshot("in")}
+                  disabled={screenshotZoom >= 3}
+                  aria-label="Zoom in"
+                  title="Zoom in"
+                >
+                  <ZoomIn size={18} />
+                </button>
+                <a
+                  href={screenshotPreview.src}
+                  download={getScreenshotFileName(screenshotPreview)}
+                  aria-label="Download screenshot"
+                  title="Download screenshot"
+                >
+                  <Download size={18} />
+                </a>
+                <button type="button" onClick={closeScreenshotPreview} aria-label="Close screenshot" title="Close">
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            <div className="screenshotStage">
+              <Image
+                src={screenshotPreview.src}
+                alt={`${screenshotPreview.deviceName} screenshot full size`}
+                width={1080}
+                height={1920}
+                unoptimized
+                style={{
+                  width: `${Math.round(screenshotZoom * 420)}px`,
+                  maxWidth: screenshotZoom > 1 ? "none" : "100%",
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }

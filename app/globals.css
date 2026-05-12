@@ -459,7 +459,7 @@ tr:last-child td {
   white-space: nowrap;
 }
 
-.screenshotLink {
+.screenshotButton {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -469,17 +469,143 @@ tr:last-child td {
   border: 1px solid var(--line);
   background: var(--panel-strong);
   border-radius: 6px;
+  padding: 0;
+  color: var(--text);
+  cursor: pointer;
 }
 
-.screenshotLink:hover,
-.screenshotLink:focus-visible {
+.screenshotButton:hover,
+.screenshotButton:focus-visible {
   border-color: var(--accent);
 }
 
-.screenshotLink img {
+.screenshotButton img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.screenshotModal {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 22px;
+}
+
+.screenshotBackdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(0, 0, 0, 0.72);
+  cursor: zoom-out;
+}
+
+.screenshotDialog {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(1120px, 100%);
+  height: min(860px, calc(100vh - 44px));
+  border: 1px solid var(--line);
+  background: #0d0f12;
+  border-radius: 8px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+
+.screenshotModalBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 60px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+  padding: 10px 12px 10px 16px;
+}
+
+.screenshotTitle {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.screenshotTitle strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.screenshotTitle span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.screenshotActions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 0 0 auto;
+}
+
+.screenshotActions button,
+.screenshotActions a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--line);
+  background: var(--panel-strong);
+  color: var(--text);
+  border-radius: 8px;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.screenshotActions button:hover:not(:disabled),
+.screenshotActions a:hover,
+.screenshotActions button:focus-visible,
+.screenshotActions a:focus-visible {
+  border-color: var(--accent);
+}
+
+.screenshotActions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.zoomValue {
+  min-width: 46px;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.screenshotStage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  overflow: auto;
+  background: #090a0c;
+  padding: 28px;
+}
+
+.screenshotStage img {
+  width: auto;
+  max-width: min(100%, 420px);
+  height: auto;
+  max-height: 100%;
+  transition:
+    width 140ms ease,
+    max-width 140ms ease;
+  border-radius: 4px;
 }
 
 .notice {
@@ -523,6 +649,27 @@ tr:last-child td {
 
   table {
     min-width: 1080px;
+  }
+
+  .screenshotModal {
+    padding: 12px;
+  }
+
+  .screenshotDialog {
+    height: calc(100vh - 24px);
+  }
+
+  .screenshotModalBar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .screenshotActions {
+    justify-content: space-between;
+  }
+
+  .screenshotStage {
+    padding: 16px;
   }
 }
 
