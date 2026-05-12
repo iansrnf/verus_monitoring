@@ -53,6 +53,7 @@ type ServerConfig = {
 
 const STALE_DEVICE_MS = 60_000;
 const RECENT_OFFLINE_MS = 24 * 60 * 60 * 1000;
+const APP_BASE_PATH = "/verus-monitoring";
 const deviceNameSorter = new Intl.Collator(undefined, {
   numeric: true,
   sensitivity: "base",
@@ -238,6 +239,10 @@ function getDeviceDisplayName(device: Device) {
   return device.name?.trim() || "Unnamed phone";
 }
 
+function getAppPath(path: string) {
+  return `${APP_BASE_PATH}${path}`;
+}
+
 function getDeviceDedupeKey(device: Device) {
   const name = device.name?.trim().toLowerCase();
 
@@ -288,7 +293,7 @@ export default function Home() {
       setLoading(true);
     }
 
-    const response = await fetch("/api/devices", { cache: "no-store" });
+    const response = await fetch(getAppPath("/api/devices"), { cache: "no-store" });
     const result = (await response.json()) as { devices?: Device[]; error?: string };
 
     if (!response.ok) {
@@ -302,7 +307,7 @@ export default function Home() {
   }, []);
 
   const loadServerConfig = useCallback(async () => {
-    const response = await fetch("/api/config/dashboard", { cache: "no-store" });
+    const response = await fetch(getAppPath("/api/config/dashboard"), { cache: "no-store" });
     const result = (await response.json()) as { config?: ServerConfig | null; error?: string };
 
     if (response.ok) {
@@ -316,7 +321,7 @@ export default function Home() {
     setSavingConfig(true);
     setConfigMessage(null);
 
-    const response = await fetch("/api/config/load", {
+    const response = await fetch(getAppPath("/api/config/load"), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
