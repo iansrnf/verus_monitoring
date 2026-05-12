@@ -423,7 +423,8 @@ export default function Home() {
       : tabDevices;
 
     return [...searchedDevices].sort((firstDevice, secondDevice) => {
-      const comparison = compareDevices(firstDevice, secondDevice, sort.key);
+      const sortKey = sort.key === "status" && deviceTab !== "online" ? "created" : sort.key;
+      const comparison = compareDevices(firstDevice, secondDevice, sortKey);
       const directionMultiplier = sort.direction === "asc" ? 1 : -1;
 
       return comparison ? comparison * directionMultiplier : firstDevice.id - secondDevice.id;
