@@ -63,6 +63,14 @@ function parseScreenshot(value: unknown) {
   return Buffer.from(base64Value, "base64");
 }
 
+function hasPngSignature(value: Buffer | null) {
+  return Boolean(
+    value &&
+      value.length >= 8 &&
+      value.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])),
+  );
+}
+
 export async function POST(request: Request) {
   if (!isAuthorizedConfigRequest(request)) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
@@ -83,6 +91,7 @@ export async function POST(request: Request) {
   }
 
   const screenshot = parseScreenshot(body.screen_shot ?? body.screenShot);
+  const screenshotReceived = Boolean(screenshot?.length);
   const payload = [
     name,
     Boolean(body.status),
@@ -139,5 +148,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({
+    ok: true,
+    screenshot_received: screenshotReceived,
+    screenshot_bytes: screenshot?.length ?? 0,
+    screenshot_png: hasPngSignature(screenshot),
+  });
 }
