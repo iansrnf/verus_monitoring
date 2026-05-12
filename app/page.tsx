@@ -1,7 +1,20 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Activity, ArrowDown, ArrowUp, ArrowUpDown, RefreshCw, Save, Search, Smartphone, X } from "lucide-react";
+import {
+  Activity,
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  Clock3,
+  RefreshCw,
+  Save,
+  Search,
+  Smartphone,
+  Wifi,
+  WifiOff,
+  X,
+} from "lucide-react";
 import { miningConfigs } from "@/lib/configs";
 
 type Device = {
@@ -464,7 +477,7 @@ export default function Home() {
               <span>Offline</span>
               <strong>{offlineCount}</strong>
             </div>
-            <div className="metric">
+            <div className="metric hashMetric" title={`Total Hash: ${formatHashRateValue(onlineHashTotal)}`}>
               <span>Total Hash</span>
               <strong>{formatHashRateValue(onlineHashTotal)}</strong>
             </div>
@@ -590,7 +603,8 @@ export default function Home() {
                 role="tab"
                 aria-selected={deviceTab === "online"}
               >
-                Online {onlineCount}
+                <Wifi size={16} aria-hidden="true" />
+                <span>Online {onlineCount}</span>
               </button>
               <button
                 className={`tab ${deviceTab === "offline" ? "active" : ""}`}
@@ -598,7 +612,8 @@ export default function Home() {
                 role="tab"
                 aria-selected={deviceTab === "offline"}
               >
-                Offline {offlineCount}
+                <WifiOff size={16} aria-hidden="true" />
+                <span>Offline {offlineCount}</span>
               </button>
               <button
                 className={`tab ${deviceTab === "recent" ? "active" : ""}`}
@@ -606,7 +621,8 @@ export default function Home() {
                 role="tab"
                 aria-selected={deviceTab === "recent"}
               >
-                Recent {recentOfflineCount}
+                <Clock3 size={16} aria-hidden="true" />
+                <span>Recent {recentOfflineCount}</span>
               </button>
             </div>
 

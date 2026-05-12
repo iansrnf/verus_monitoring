@@ -60,16 +60,22 @@ select {
 
 .summary {
   display: grid;
-  grid-template-columns: repeat(4, minmax(120px, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
-  width: min(620px, 100%);
+  width: min(680px, 100%);
 }
 
 .metric {
+  min-width: 0;
+  min-height: 84px;
   border: 1px solid var(--line);
   background: var(--panel);
   border-radius: 8px;
   padding: 14px;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    transform 160ms ease;
 }
 
 .metric span {
@@ -82,8 +88,23 @@ select {
 .metric strong {
   display: block;
   margin-top: 7px;
-  font-size: 26px;
-  white-space: nowrap;
+  max-width: 100%;
+  font-size: clamp(21px, 2.3vw, 26px);
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+
+.hashMetric strong {
+  font-size: clamp(18px, 2vw, 24px);
+  white-space: normal;
+}
+
+@media (hover: hover) {
+  .metric:hover {
+    border-color: var(--accent);
+    background: var(--panel-strong);
+    transform: translateY(-1px);
+  }
 }
 
 .toolbar {
@@ -308,6 +329,10 @@ select {
 }
 
 .tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
   min-height: 36px;
   border: 0;
   background: transparent;
@@ -316,6 +341,10 @@ select {
   padding: 0 14px;
   cursor: pointer;
   font-weight: 700;
+}
+
+.tab svg {
+  flex: 0 0 auto;
 }
 
 .tab.active {
@@ -457,6 +486,7 @@ tr:last-child td {
   }
 
   .summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     width: 100%;
   }
 
@@ -470,5 +500,16 @@ tr:last-child td {
 
   table {
     min-width: 980px;
+  }
+}
+
+@media (max-width: 460px) {
+  .summary {
+    grid-template-columns: 1fr;
+  }
+
+  .metric {
+    min-height: 72px;
+    padding: 12px;
   }
 }
