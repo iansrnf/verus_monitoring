@@ -459,6 +459,29 @@ tr:last-child td {
   white-space: nowrap;
 }
 
+.screenshotLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  height: 44px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: var(--panel-strong);
+  border-radius: 6px;
+}
+
+.screenshotLink:hover,
+.screenshotLink:focus-visible {
+  border-color: var(--accent);
+}
+
+.screenshotLink img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 .notice {
   border: 1px solid rgba(251, 191, 36, 0.45);
   background: rgba(251, 191, 36, 0.1);
@@ -499,7 +522,7 @@ tr:last-child td {
   }
 
   table {
-    min-width: 980px;
+    min-width: 1080px;
   }
 }
 

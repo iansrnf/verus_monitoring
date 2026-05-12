@@ -1,33 +1,36 @@
 import { NextResponse } from "next/server";
 import { isAuthorizedConfigRequest } from "@/lib/api-auth";
-import { supabaseAdmin } from "@/lib/supabase-admin";
+import { postgresPool } from "@/lib/postgres";
 
 export async function GET(request: Request) {
   if (!isAuthorizedConfigRequest(request)) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
-  if (!supabaseAdmin) {
+  if (!postgresPool) {
     return NextResponse.json(
-      { error: "Missing SUPABASE_SERVICE_ROLE_KEY on the server." },
+      { error: "Missing DATABASE_URL on the server." },
       { status: 500 },
     );
   }
 
-  const { data, error } = await supabaseAdmin
-    .from("my_config")
-    .select("url, port, wallet, password")
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
+  try {
+    const { rows } = await postgresPool.query(
+      `
+        select url, port, wallet, password
+        from my_config
+        order by created_at asc nulls last, id asc
+        limit 1
+      `,
+    );
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    if (!rows[0]) {
+      return NextResponse.json({ error: "No config found." }, { status: 404 });
+    }
+
+    return NextResponse.json(rows[0]);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to load config.";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-
-  if (!data) {
-    return NextResponse.json({ error: "No config found." }, { status: 404 });
-  }
-
-  return NextResponse.json(data);
 }

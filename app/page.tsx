@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Activity,
@@ -19,14 +20,15 @@ import { miningConfigs } from "@/lib/configs";
 
 type Device = {
   id: number;
-  created_at: string;
+  created_at: string | null;
   name: string | null;
   hash: string | null;
   config: string | null;
   shares: string | null;
-  cpu: number | null;
+  cpu_core: number | null;
   temp: string | null;
   status: boolean | null;
+  screen_shot: string | null;
 };
 
 type DeviceWithComputedStatus = Device & {
@@ -37,7 +39,7 @@ type DeviceWithComputedStatus = Device & {
 
 type DeviceTab = "online" | "offline" | "recent";
 type SortDirection = "asc" | "desc";
-type SortKey = "device" | "status" | "hash" | "shares" | "cpu" | "temp" | "config" | "created";
+type SortKey = "device" | "status" | "hash" | "shares" | "cpu" | "temp" | "config" | "screenshot" | "created";
 
 type SortState = {
   key: SortKey;
@@ -62,7 +64,11 @@ const hashRateFormatter = new Intl.NumberFormat(undefined, {
   maximumFractionDigits: 2,
 });
 
-function formatDate(value: string) {
+function formatDate(value: string | null) {
+  if (!value) {
+    return "-";
+  }
+
   return new Intl.DateTimeFormat(undefined, {
     dateStyle: "medium",
     timeStyle: "medium",
@@ -70,6 +76,10 @@ function formatDate(value: string) {
 }
 
 function isDeviceOnline(device: Device, now: number) {
+  if (!device.created_at) {
+    return false;
+  }
+
   const updatedAt = new Date(device.created_at).getTime();
 
   if (!device.status || Number.isNaN(updatedAt)) {
@@ -80,6 +90,10 @@ function isDeviceOnline(device: Device, now: number) {
 }
 
 function getDeviceLastSeenAt(device: Device) {
+  if (!device.created_at) {
+    return null;
+  }
+
   const lastSeenAt = new Date(device.created_at).getTime();
 
   return Number.isNaN(lastSeenAt) ? null : lastSeenAt;
@@ -216,7 +230,7 @@ function compareDevices(firstDevice: DeviceWithComputedStatus, secondDevice: Dev
     case "shares":
       return compareText(firstDevice.shares, secondDevice.shares);
     case "cpu":
-      return compareNumbers(firstDevice.cpu ?? null, secondDevice.cpu ?? null);
+      return compareNumbers(firstDevice.cpu_core ?? null, secondDevice.cpu_core ?? null);
     case "temp": {
       const numericComparison = compareNumbers(getNumberFromText(firstDevice.temp), getNumberFromText(secondDevice.temp));
 
@@ -224,6 +238,8 @@ function compareDevices(firstDevice: DeviceWithComputedStatus, secondDevice: Dev
     }
     case "config":
       return compareText(firstDevice.config, secondDevice.config);
+    case "screenshot":
+      return Number(Boolean(firstDevice.screen_shot)) - Number(Boolean(secondDevice.screen_shot));
     case "created":
       return compareNumbers(firstDevice.lastSeenAt, secondDevice.lastSeenAt);
     default:
@@ -361,7 +377,7 @@ export default function Home() {
   }
 
   useEffect(() => {
-    // Supabase is the external source of truth for this page.
+    // The database is the external source of truth for this page.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadDevices(false);
     void loadServerConfig();
@@ -431,8 +447,9 @@ export default function Home() {
             formatHashRate(device.hash),
             device.config,
             device.shares,
-            device.cpu,
+            device.cpu_core,
             device.temp,
+            device.screen_shot ? "screenshot" : null,
             device.statusLabel,
           ]
             .filter(Boolean)
@@ -466,7 +483,7 @@ export default function Home() {
         <header className="topbar">
           <div className="titleBlock">
             <h1>Verus Device Monitor</h1>
-            <p>Live Supabase view for installed phones and miner config.</p>
+            <p>Live Postgres view for installed phones, miner status, and screenshots.</p>
           </div>
 
           <div className="summary" aria-label="Device summary">
@@ -672,6 +689,11 @@ export default function Home() {
                         Config {renderSortIcon("config")}
                       </button>
                     </th>
+                    <th aria-sort={sort.key === "screenshot" ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}>
+                      <button className="sortHeader" onClick={() => toggleSort("screenshot")} type="button">
+                        Screenshot {renderSortIcon("screenshot")}
+                      </button>
+                    </th>
                     <th aria-sort={sort.key === "created" ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}>
                       <button className="sortHeader" onClick={() => toggleSort("created")} type="button">
                         Created {renderSortIcon("created")}
@@ -682,13 +704,13 @@ export default function Home() {
                 <tbody>
                   {loading ? (
                     <tr>
-                      <td className="empty" colSpan={8}>
+                      <td className="empty" colSpan={9}>
                         Loading devices...
                       </td>
                     </tr>
                   ) : filteredDevices.length === 0 ? (
                     <tr>
-                      <td className="empty" colSpan={8}>
+                      <td className="empty" colSpan={9}>
                         {query.trim() ? "No devices match your search." : "No devices found."}
                       </td>
                     </tr>
@@ -715,12 +737,27 @@ export default function Home() {
                         <td className="mono" title={device.shares ?? ""}>
                           {device.shares || "0/0 shares"}
                         </td>
-                        <td className="mono">{device.cpu ?? 0} cores</td>
+                        <td className="mono">{device.cpu_core ?? 0} cores</td>
                         <td className="mono" title={device.temp ?? ""}>
                           {device.temp || "-"}
                         </td>
                         <td className="config" title={device.config ?? ""}>
                           <Activity size={14} aria-hidden="true" /> {device.config || "-"}
+                        </td>
+                        <td>
+                          {device.screen_shot ? (
+                            <a className="screenshotLink" href={device.screen_shot} target="_blank" rel="noreferrer">
+                              <Image
+                                src={device.screen_shot}
+                                alt={`${getDeviceDisplayName(device)} screenshot`}
+                                width={72}
+                                height={44}
+                                unoptimized
+                              />
+                            </a>
+                          ) : (
+                            <span className="muted">-</span>
+                          )}
                         </td>
                         <td className="muted">{formatDate(device.created_at)}</td>
                       </tr>

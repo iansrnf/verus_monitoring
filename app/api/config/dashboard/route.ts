@@ -1,24 +1,27 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase-admin";
+import { postgresPool } from "@/lib/postgres";
 
 export async function GET() {
-  if (!supabaseAdmin) {
+  if (!postgresPool) {
     return NextResponse.json(
-      { error: "Missing SUPABASE_SERVICE_ROLE_KEY on the server." },
+      { error: "Missing DATABASE_URL on the server." },
       { status: 500 },
     );
   }
 
-  const { data, error } = await supabaseAdmin
-    .from("my_config")
-    .select("url, port, wallet, password")
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
+  try {
+    const { rows } = await postgresPool.query(
+      `
+        select url, port, wallet, password
+        from my_config
+        order by created_at asc nulls last, id asc
+        limit 1
+      `,
+    );
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ config: rows[0] ?? null });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to load config.";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-
-  return NextResponse.json({ config: data ?? null });
 }
