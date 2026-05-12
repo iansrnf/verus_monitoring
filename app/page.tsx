@@ -225,6 +225,38 @@ function getDeviceDisplayName(device: Device) {
   return device.name?.trim() || "Unnamed phone";
 }
 
+function getDeviceDedupeKey(device: Device) {
+  const name = device.name?.trim().toLowerCase();
+
+  return name ? `name:${name}` : `id:${device.id}`;
+}
+
+function compareDeviceFreshness(firstDevice: DeviceWithComputedStatus, secondDevice: DeviceWithComputedStatus) {
+  return (secondDevice.lastSeenAt ?? 0) - (firstDevice.lastSeenAt ?? 0);
+}
+
+function getUniqueDevicesByName(devices: DeviceWithComputedStatus[]) {
+  const groupedDevices = new Map<string, DeviceWithComputedStatus[]>();
+
+  devices.forEach((device) => {
+    const key = getDeviceDedupeKey(device);
+    const matchingDevices = groupedDevices.get(key) ?? [];
+
+    matchingDevices.push(device);
+    groupedDevices.set(key, matchingDevices);
+  });
+
+  return Array.from(groupedDevices.values()).map((matchingDevices) => {
+    const onlineDevices = matchingDevices.filter((device) => device.computedOnline).sort(compareDeviceFreshness);
+
+    if (onlineDevices.length > 0) {
+      return onlineDevices[0];
+    }
+
+    return [...matchingDevices].sort(compareDeviceFreshness)[0];
+  });
+}
+
 export default function Home() {
   const [devices, setDevices] = useState<Device[]>([]);
   const [query, setQuery] = useState("");
@@ -353,9 +385,14 @@ export default function Home() {
     [devices, now],
   );
 
+  const uniqueDevicesWithStatus = useMemo(
+    () => getUniqueDevicesByName(devicesWithStatus),
+    [devicesWithStatus],
+  );
+
   const filteredDevices = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    const tabDevices = devicesWithStatus.filter((device) => {
+    const tabDevices = uniqueDevicesWithStatus.filter((device) => {
       if (deviceTab === "online") {
         return device.computedOnline;
       }
@@ -391,12 +428,12 @@ export default function Home() {
 
       return comparison ? comparison * directionMultiplier : firstDevice.id - secondDevice.id;
     });
-  }, [devicesWithStatus, deviceTab, now, query, sort]);
+  }, [uniqueDevicesWithStatus, deviceTab, now, query, sort]);
 
-  const onlineCount = devicesWithStatus.filter((device) => device.computedOnline).length;
-  const offlineCount = devices.length - onlineCount;
-  const recentOfflineCount = devicesWithStatus.filter((device) => isRecentlyOffline(device, now)).length;
-  const onlineHashTotal = devicesWithStatus.reduce((total, device) => {
+  const onlineCount = uniqueDevicesWithStatus.filter((device) => device.computedOnline).length;
+  const offlineCount = uniqueDevicesWithStatus.length - onlineCount;
+  const recentOfflineCount = uniqueDevicesWithStatus.filter((device) => isRecentlyOffline(device, now)).length;
+  const onlineHashTotal = uniqueDevicesWithStatus.reduce((total, device) => {
     if (!device.computedOnline) {
       return total;
     }
