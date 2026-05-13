@@ -7,6 +7,7 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
+  ChevronDown,
   Clock3,
   Download,
   Images,
@@ -374,6 +375,7 @@ export default function Home() {
   const [configMessage, setConfigMessage] = useState<string | null>(null);
   const [screenshotPreview, setScreenshotPreview] = useState<ScreenshotPreview | null>(null);
   const [screenshotZoom, setScreenshotZoom] = useState(1);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => new Set());
 
   const loadDevices = useCallback(async (showLoading = true) => {
     if (showLoading) {
@@ -470,6 +472,20 @@ export default function Home() {
       const nextZoom = direction === "in" ? currentZoom + 0.25 : currentZoom - 0.25;
 
       return Math.min(3, Math.max(0.5, Number(nextZoom.toFixed(2))));
+    });
+  }
+
+  function toggleGroup(groupKey: string) {
+    setExpandedGroups((currentGroups) => {
+      const nextGroups = new Set(currentGroups);
+
+      if (nextGroups.has(groupKey)) {
+        nextGroups.delete(groupKey);
+      } else {
+        nextGroups.add(groupKey);
+      }
+
+      return nextGroups;
     });
   }
 
@@ -800,50 +816,69 @@ export default function Home() {
                 ) : (
                   filteredDeviceGroups.map((group) => (
                     <article className="groupSection" key={group.key}>
-                      <header className="groupHeader">
-                        <div>
+                      <button
+                        className="groupHeader"
+                        type="button"
+                        onClick={() => toggleGroup(group.key)}
+                        aria-expanded={expandedGroups.has(group.key)}
+                      >
+                        <div className="groupTitle">
+                          <ChevronDown size={18} aria-hidden="true" />
                           <h2>{group.label}</h2>
+                        </div>
+
+                        <div className="groupStats" aria-label={`${group.label} summary`}>
                           <span>
-                            {group.onlineCount} online / {group.devices.length - group.onlineCount} offline
+                            <small>Devices</small>
+                            <strong>{group.devices.length}</strong>
+                          </span>
+                          <span>
+                            <small>Online</small>
+                            <strong>{group.onlineCount}</strong>
+                          </span>
+                          <span>
+                            <small>Offline</small>
+                            <strong>{group.devices.length - group.onlineCount}</strong>
                           </span>
                         </div>
-                        <strong>{group.devices.length}</strong>
-                      </header>
+                      </button>
 
-                      <div className="screenshotGrid">
-                        {group.devices.map((device) => (
-                          <div className="groupDevice" key={device.id}>
-                            {device.screen_shot ? (
-                              <button
-                                className="groupScreenshot"
-                                type="button"
-                                onClick={() => openScreenshotPreview(device)}
-                                title={`Open ${getDeviceDisplayName(device)} screenshot`}
-                                aria-label={`Open ${getDeviceDisplayName(device)} screenshot`}
-                              >
-                                <Image
-                                  src={device.screen_shot}
-                                  alt={`${getDeviceDisplayName(device)} screenshot`}
-                                  width={280}
-                                  height={460}
-                                  unoptimized
-                                />
-                              </button>
-                            ) : (
-                              <div className="groupScreenshot placeholder">
-                                <Smartphone size={28} aria-hidden="true" />
+                      {expandedGroups.has(group.key) ? (
+                        <div className="screenshotGrid">
+                          {group.devices.map((device) => (
+                            <div className="groupDevice" key={device.id}>
+                              {device.screen_shot ? (
+                                <button
+                                  className="groupScreenshot"
+                                  type="button"
+                                  onClick={() => openScreenshotPreview(device)}
+                                  title={`Open ${getDeviceDisplayName(device)} screenshot`}
+                                  aria-label={`Open ${getDeviceDisplayName(device)} screenshot`}
+                                >
+                                  <Image
+                                    src={device.screen_shot}
+                                    alt={`${getDeviceDisplayName(device)} screenshot`}
+                                    width={280}
+                                    height={460}
+                                    unoptimized
+                                  />
+                                </button>
+                              ) : (
+                                <div className="groupScreenshot placeholder">
+                                  <Smartphone size={28} aria-hidden="true" />
+                                </div>
+                              )}
+
+                              <div className="groupDeviceName">
+                                <span className={`status ${device.computedOnline ? "online" : "offline"}`}>
+                                  <span className="dot" aria-hidden="true" />
+                                  <strong>{getDeviceDisplayName(device)}</strong>
+                                </span>
                               </div>
-                            )}
-
-                            <div className="groupDeviceName">
-                              <span className={`status ${device.computedOnline ? "online" : "offline"}`}>
-                                <span className="dot" aria-hidden="true" />
-                                <strong>{getDeviceDisplayName(device)}</strong>
-                              </span>
                             </div>
-                          </div>
-                        ))}
-                      </div>
+                          ))}
+                        </div>
+                      ) : null}
                     </article>
                   ))
                 )}
