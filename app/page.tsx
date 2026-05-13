@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Activity,
@@ -15,6 +16,7 @@ import {
   Save,
   Search,
   Smartphone,
+  WalletCards,
   Wifi,
   WifiOff,
   X,
@@ -632,6 +634,10 @@ export default function Home() {
           <div className="titleBlock">
             <h1>Verus Device Monitor</h1>
             <p>Live Postgres view for installed phones, miner status, and screenshots.</p>
+            <Link className="dashboardLink" href="/investments">
+              <WalletCards size={16} />
+              Investment Dashboard
+            </Link>
           </div>
 
           <div className="summary" aria-label="Device summary">

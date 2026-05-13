@@ -58,6 +58,35 @@ select {
   color: var(--muted);
 }
 
+.dashboardLink,
+.backLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  min-height: 34px;
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.backLink {
+  margin: 0 0 12px;
+}
+
+.dashboardLink:hover,
+.backLink:hover,
+.dashboardLink:focus-visible,
+.backLink:focus-visible {
+  border-color: var(--accent);
+}
+
 .summary {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -97,6 +126,16 @@ select {
 .hashMetric strong {
   font-size: clamp(18px, 2vw, 24px);
   white-space: normal;
+}
+
+.positiveMetric strong,
+.positiveText {
+  color: var(--online);
+}
+
+.negativeMetric strong,
+.negativeText {
+  color: var(--offline);
 }
 
 @media (hover: hover) {
@@ -762,6 +801,7 @@ tr:last-child td {
   background: rgba(251, 191, 36, 0.1);
   border-radius: 8px;
   padding: 16px;
+  margin-bottom: 14px;
   color: #fde68a;
 }
 
@@ -769,6 +809,282 @@ tr:last-child td {
   padding: 42px 18px;
   color: var(--muted);
   text-align: center;
+}
+
+.investmentPage .shell {
+  width: min(1280px, 100%);
+}
+
+.investmentGrid {
+  display: grid;
+  grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.investmentSidebar,
+.investmentDetail {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.investmentPanelHeader,
+.detailHeader,
+.incomeListHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel-strong);
+  padding: 16px;
+}
+
+.investmentPanelHeader span,
+.detailHeader span,
+.incomeListHeader span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.investmentPanelHeader strong {
+  display: block;
+  margin-top: 5px;
+  overflow-wrap: anywhere;
+}
+
+.investmentPanelHeader button,
+.dangerIcon,
+.incomeItem button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.investmentPanelHeader button:hover,
+.incomeItem button:hover {
+  border-color: var(--accent);
+}
+
+.dangerIcon:hover,
+.incomeItem button:hover {
+  border-color: var(--offline);
+  color: var(--offline);
+}
+
+.investmentForm,
+.incomeForm {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+
+.incomeForm {
+  grid-template-columns: minmax(160px, 0.65fr) minmax(220px, 1fr) auto;
+  align-items: end;
+  border-bottom: 1px solid var(--line);
+}
+
+.investmentForm label,
+.incomeForm label {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.investmentForm span,
+.incomeForm span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.investmentForm input,
+.investmentForm textarea,
+.incomeForm input {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  outline: 0;
+  background: var(--panel-strong);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 0 12px;
+}
+
+.investmentForm textarea {
+  min-height: 78px;
+  padding: 11px 12px;
+  resize: vertical;
+}
+
+.investmentForm input:focus,
+.investmentForm textarea:focus,
+.incomeForm input:focus {
+  border-color: var(--accent);
+}
+
+.investmentList {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid var(--line);
+  padding: 12px;
+}
+
+.investmentItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text);
+  border-radius: 8px;
+  padding: 12px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.investmentItem:hover,
+.investmentItem.active {
+  border-color: var(--line);
+  background: var(--panel-strong);
+}
+
+.investmentItem span {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.investmentItem strong,
+.investmentItem small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.investmentItem small {
+  color: var(--muted);
+}
+
+.investmentItem b {
+  flex: 0 0 auto;
+  font-size: 14px;
+}
+
+.detailHeader h2 {
+  margin: 4px 0;
+  font-size: clamp(24px, 3vw, 34px);
+  line-height: 1.1;
+}
+
+.detailHeader p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.investmentMetrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding: 16px;
+}
+
+.investmentMetrics div {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  border: 1px solid var(--line);
+  background: #141619;
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.investmentMetrics svg {
+  color: var(--accent);
+}
+
+.investmentMetrics span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.investmentMetrics strong {
+  overflow-wrap: anywhere;
+}
+
+.incomeList {
+  display: grid;
+}
+
+.incomeListHeader strong {
+  color: var(--accent);
+}
+
+.incomeItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border-bottom: 1px solid var(--line);
+  padding: 14px 16px;
+}
+
+.incomeItem:last-child {
+  border-bottom: 0;
+}
+
+.incomeItem div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.incomeItem span,
+.incomeItem small {
+  color: var(--muted);
+}
+
+.incomeItem strong,
+.incomeItem span,
+.incomeItem small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.investmentEmpty {
+  display: flex;
+  min-height: 420px;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 9px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.investmentEmpty strong {
+  color: var(--text);
 }
 
 @media (max-width: 820px) {
@@ -786,6 +1102,12 @@ tr:last-child td {
   .summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     width: 100%;
+  }
+
+  .investmentGrid,
+  .investmentMetrics,
+  .incomeForm {
+    grid-template-columns: 1fr;
   }
 
   .configPreview {

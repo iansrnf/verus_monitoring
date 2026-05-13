@@ -1,0 +1,431 @@
+"use client";
+
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  ArrowLeft,
+  Banknote,
+  Plus,
+  ReceiptText,
+  RefreshCw,
+  Trash2,
+  TrendingDown,
+  TrendingUp,
+  WalletCards,
+} from "lucide-react";
+
+type Income = {
+  id: number;
+  inv_id: number;
+  amount: number;
+  description: string | null;
+  created_at: string | null;
+};
+
+type Investment = {
+  id: number;
+  name: string | null;
+  cost: number;
+  description: string | null;
+  created_at: string | null;
+  total_income: number;
+  income_count: number;
+  incomes: Income[];
+};
+
+const APP_BASE_PATH = "/verus-monitoring";
+const USD_TO_PHP = 61.458;
+
+function getAppPath(path: string) {
+  return `${APP_BASE_PATH}${path}`;
+}
+
+function formatUsd(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+  }).format(value);
+}
+
+function formatPhp(value: number) {
+  return new Intl.NumberFormat("en-PH", {
+    style: "currency",
+    currency: "PHP",
+    maximumFractionDigits: 0,
+  }).format(value * USD_TO_PHP);
+}
+
+function formatMoney(value: number) {
+  return `${formatUsd(value)} / ${formatPhp(value)}`;
+}
+
+function formatDate(value: string | null) {
+  if (!value) {
+    return "-";
+  }
+
+  const parsedDate = new Date(value);
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(parsedDate);
+}
+
+function getInvestmentName(investment: Investment) {
+  return investment.name?.trim() || "Untitled investment";
+}
+
+function getProfit(investment: Investment) {
+  return investment.total_income - investment.cost;
+}
+
+export default function InvestmentsPage() {
+  const [investments, setInvestments] = useState<Investment[]>([]);
+  const [selectedInvestmentId, setSelectedInvestmentId] = useState<number | null>(null);
+  const [investmentName, setInvestmentName] = useState("");
+  const [investmentCost, setInvestmentCost] = useState("");
+  const [investmentDescription, setInvestmentDescription] = useState("");
+  const [incomeAmount, setIncomeAmount] = useState("");
+  const [incomeDescription, setIncomeDescription] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [savingInvestment, setSavingInvestment] = useState(false);
+  const [savingIncome, setSavingIncome] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadInvestments = useCallback(async (showLoading = true) => {
+    if (showLoading) {
+      setLoading(true);
+    }
+
+    const response = await fetch(getAppPath("/api/investments"), { cache: "no-store" });
+    const result = (await response.json()) as { investments?: Investment[]; error?: string };
+
+    if (!response.ok) {
+      setError(result.error ?? "Failed to load investments.");
+    } else {
+      const nextInvestments = result.investments ?? [];
+
+      setError(null);
+      setInvestments(nextInvestments);
+      setSelectedInvestmentId((currentId) => currentId ?? nextInvestments[0]?.id ?? null);
+    }
+
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    // The database is the external source of truth for this page.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadInvestments();
+  }, [loadInvestments]);
+
+  const selectedInvestment = useMemo(
+    () => investments.find((investment) => investment.id === selectedInvestmentId) ?? investments[0] ?? null,
+    [investments, selectedInvestmentId],
+  );
+
+  const totals = useMemo(() => {
+    const cost = investments.reduce((total, investment) => total + investment.cost, 0);
+    const income = investments.reduce((total, investment) => total + investment.total_income, 0);
+
+    return {
+      cost,
+      income,
+      profit: income - cost,
+    };
+  }, [investments]);
+
+  async function createInvestment(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSavingInvestment(true);
+    setError(null);
+
+    const response = await fetch(getAppPath("/api/investments"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: investmentName,
+        cost: investmentCost,
+        description: investmentDescription,
+      }),
+    });
+    const result = (await response.json()) as { investment?: Investment; error?: string };
+
+    if (!response.ok) {
+      setError(result.error ?? "Failed to create investment.");
+    } else {
+      setInvestmentName("");
+      setInvestmentCost("");
+      setInvestmentDescription("");
+      await loadInvestments(false);
+      setSelectedInvestmentId(result.investment?.id ?? null);
+    }
+
+    setSavingInvestment(false);
+  }
+
+  async function createIncome(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!selectedInvestment) {
+      return;
+    }
+
+    setSavingIncome(true);
+    setError(null);
+
+    const response = await fetch(getAppPath(`/api/investments/${selectedInvestment.id}/income`), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        amount: incomeAmount,
+        description: incomeDescription,
+      }),
+    });
+    const result = (await response.json()) as { error?: string };
+
+    if (!response.ok) {
+      setError(result.error ?? "Failed to add income.");
+    } else {
+      setIncomeAmount("");
+      setIncomeDescription("");
+      await loadInvestments(false);
+    }
+
+    setSavingIncome(false);
+  }
+
+  async function deleteInvestment(investmentId: number) {
+    const response = await fetch(getAppPath(`/api/investments/${investmentId}`), { method: "DELETE" });
+    const result = (await response.json()) as { error?: string };
+
+    if (!response.ok) {
+      setError(result.error ?? "Failed to delete investment.");
+      return;
+    }
+
+    setSelectedInvestmentId(null);
+    await loadInvestments(false);
+  }
+
+  async function deleteIncome(incomeId: number) {
+    const response = await fetch(getAppPath(`/api/income/${incomeId}`), { method: "DELETE" });
+    const result = (await response.json()) as { error?: string };
+
+    if (!response.ok) {
+      setError(result.error ?? "Failed to delete income.");
+      return;
+    }
+
+    await loadInvestments(false);
+  }
+
+  return (
+    <main className="page investmentPage">
+      <div className="shell">
+        <header className="topbar">
+          <div className="titleBlock">
+            <Link className="backLink" href="/">
+              <ArrowLeft size={16} />
+              Devices
+            </Link>
+            <h1>Investment Dashboard</h1>
+            <p>Track expenditures like phones and services, then record income against each investment.</p>
+          </div>
+
+          <div className="summary" aria-label="Investment summary">
+            <div className="metric">
+              <span>Expenditures</span>
+              <strong>{formatUsd(totals.cost)}</strong>
+            </div>
+            <div className="metric">
+              <span>Income</span>
+              <strong>{formatUsd(totals.income)}</strong>
+            </div>
+            <div className={`metric ${totals.profit >= 0 ? "positiveMetric" : "negativeMetric"}`}>
+              <span>Balance</span>
+              <strong>{formatUsd(totals.profit)}</strong>
+            </div>
+            <div className="metric">
+              <span>Investments</span>
+              <strong>{investments.length}</strong>
+            </div>
+          </div>
+        </header>
+
+        {error ? <div className="notice">{error}</div> : null}
+
+        <section className="investmentGrid">
+          <aside className="investmentSidebar" aria-label="Investment list">
+            <div className="investmentPanelHeader">
+              <div>
+                <span>Portfolio</span>
+                <strong>{formatMoney(totals.profit)}</strong>
+              </div>
+              <button type="button" onClick={() => void loadInvestments()} aria-label="Refresh investments" title="Refresh investments">
+                <RefreshCw size={16} />
+              </button>
+            </div>
+
+            <form className="investmentForm" onSubmit={createInvestment}>
+              <label>
+                <span>Name</span>
+                <input value={investmentName} onChange={(event) => setInvestmentName(event.target.value)} placeholder="Phone batch, Contabo" />
+              </label>
+              <label>
+                <span>Cost</span>
+                <input
+                  value={investmentCost}
+                  onChange={(event) => setInvestmentCost(event.target.value)}
+                  inputMode="decimal"
+                  placeholder="0.00"
+                />
+              </label>
+              <label>
+                <span>Description</span>
+                <textarea
+                  value={investmentDescription}
+                  onChange={(event) => setInvestmentDescription(event.target.value)}
+                  placeholder="Notes for this expenditure"
+                />
+              </label>
+              <button className="loadConfig" type="submit" disabled={savingInvestment}>
+                <Plus size={17} />
+                {savingInvestment ? "Adding..." : "Add Investment"}
+              </button>
+            </form>
+
+            <div className="investmentList">
+              {loading ? (
+                <div className="empty">Loading investments...</div>
+              ) : investments.length === 0 ? (
+                <div className="empty">No investments yet.</div>
+              ) : (
+                investments.map((investment) => {
+                  const profit = getProfit(investment);
+
+                  return (
+                    <button
+                      className={`investmentItem ${selectedInvestment?.id === investment.id ? "active" : ""}`}
+                      key={investment.id}
+                      type="button"
+                      onClick={() => setSelectedInvestmentId(investment.id)}
+                    >
+                      <span>
+                        <strong>{getInvestmentName(investment)}</strong>
+                        <small>{investment.income_count} income records</small>
+                      </span>
+                      <b className={profit >= 0 ? "positiveText" : "negativeText"}>{formatUsd(profit)}</b>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </aside>
+
+          <section className="investmentDetail" aria-label="Investment detail">
+            {selectedInvestment ? (
+              <>
+                <div className="detailHeader">
+                  <div>
+                    <span>Selected Investment</span>
+                    <h2>{getInvestmentName(selectedInvestment)}</h2>
+                    <p>{selectedInvestment.description || "No description."}</p>
+                  </div>
+                  <button
+                    className="dangerIcon"
+                    type="button"
+                    onClick={() => void deleteInvestment(selectedInvestment.id)}
+                    aria-label="Delete investment"
+                    title="Delete investment"
+                  >
+                    <Trash2 size={17} />
+                  </button>
+                </div>
+
+                <div className="investmentMetrics">
+                  <div>
+                    <ReceiptText size={18} />
+                    <span>Cost</span>
+                    <strong>{formatMoney(selectedInvestment.cost)}</strong>
+                  </div>
+                  <div>
+                    <Banknote size={18} />
+                    <span>Income</span>
+                    <strong>{formatMoney(selectedInvestment.total_income)}</strong>
+                  </div>
+                  <div>
+                    {getProfit(selectedInvestment) >= 0 ? <TrendingUp size={18} /> : <TrendingDown size={18} />}
+                    <span>Profit / Loss</span>
+                    <strong className={getProfit(selectedInvestment) >= 0 ? "positiveText" : "negativeText"}>
+                      {formatMoney(getProfit(selectedInvestment))}
+                    </strong>
+                  </div>
+                </div>
+
+                <form className="incomeForm" onSubmit={createIncome}>
+                  <label>
+                    <span>Income Amount</span>
+                    <input
+                      value={incomeAmount}
+                      onChange={(event) => setIncomeAmount(event.target.value)}
+                      inputMode="decimal"
+                      placeholder="0.00"
+                    />
+                  </label>
+                  <label>
+                    <span>Description</span>
+                    <input
+                      value={incomeDescription}
+                      onChange={(event) => setIncomeDescription(event.target.value)}
+                      placeholder="Daily return, payout, refund"
+                    />
+                  </label>
+                  <button className="loadConfig" type="submit" disabled={savingIncome}>
+                    <Plus size={17} />
+                    {savingIncome ? "Adding..." : "Add Income"}
+                  </button>
+                </form>
+
+                <div className="incomeList">
+                  <div className="incomeListHeader">
+                    <span>Income History</span>
+                    <strong>{selectedInvestment.incomes.length}</strong>
+                  </div>
+
+                  {selectedInvestment.incomes.length === 0 ? (
+                    <div className="empty">No income records for this investment yet.</div>
+                  ) : (
+                    selectedInvestment.incomes.map((income) => (
+                      <div className="incomeItem" key={income.id}>
+                        <div>
+                          <strong>{formatMoney(income.amount)}</strong>
+                          <span>{income.description || "Income"}</span>
+                          <small>{formatDate(income.created_at)}</small>
+                        </div>
+                        <button type="button" onClick={() => void deleteIncome(income.id)} aria-label="Delete income" title="Delete income">
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="investmentEmpty">
+                <WalletCards size={34} />
+                <strong>Select or create an investment</strong>
+                <span>Income records will attach to the selected expenditure.</span>
+              </div>
+            )}
+          </section>
+        </section>
+      </div>
+    </main>
+  );
+}
