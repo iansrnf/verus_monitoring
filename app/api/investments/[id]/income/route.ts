@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getIncomeInvestmentColumn } from "@/lib/investments-schema";
 import { postgresPool } from "@/lib/postgres";
 
 type RouteContext = {
@@ -59,11 +60,12 @@ export async function POST(request: Request, context: RouteContext) {
       return NextResponse.json({ error: "Investment not found." }, { status: 404 });
     }
 
+    const incomeInvestmentColumn = await getIncomeInvestmentColumn(postgresPool);
     const { rows } = await postgresPool.query(
       `
-        insert into income (inv_id, amount, description, created_at)
+        insert into income (${incomeInvestmentColumn}, amount, description, created_at)
         values ($1, $2, $3, now())
-        returning id, inv_id, amount, description, created_at::text as created_at
+        returning id, ${incomeInvestmentColumn} as inv_id, amount, description, created_at::text as created_at
       `,
       [investmentId, amount, description],
     );

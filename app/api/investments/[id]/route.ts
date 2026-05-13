@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getIncomeInvestmentColumn } from "@/lib/investments-schema";
 import { postgresPool } from "@/lib/postgres";
 
 type RouteContext = {
@@ -26,7 +27,9 @@ export async function DELETE(_request: Request, context: RouteContext) {
   }
 
   try {
-    await postgresPool.query("delete from income where inv_id = $1", [id]);
+    const incomeInvestmentColumn = await getIncomeInvestmentColumn(postgresPool);
+
+    await postgresPool.query(`delete from income where ${incomeInvestmentColumn} = $1`, [id]);
     const result = await postgresPool.query("delete from investments where id = $1", [id]);
 
     if (result.rowCount === 0) {

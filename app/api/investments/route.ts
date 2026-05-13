@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getIncomeInvestmentColumn } from "@/lib/investments-schema";
 import { postgresPool } from "@/lib/postgres";
 
 type InvestmentRequest = {
@@ -27,6 +28,7 @@ export async function GET() {
   }
 
   try {
+    const incomeInvestmentColumn = await getIncomeInvestmentColumn(postgresPool);
     const { rows: investmentRows } = await postgresPool.query(`
       select
         i.id,
@@ -37,7 +39,7 @@ export async function GET() {
         coalesce(sum(inc.amount), 0)::double precision as total_income,
         count(inc.id)::integer as income_count
       from investments i
-      left join income inc on inc.inv_id = i.id
+      left join income inc on inc.${incomeInvestmentColumn} = i.id
       group by i.id, i.name, i.cost, i.description, i.created_at
       order by i.created_at desc nulls last, i.id desc
     `);
@@ -45,7 +47,7 @@ export async function GET() {
     const { rows: incomeRows } = await postgresPool.query(`
       select
         id,
-        inv_id,
+        ${incomeInvestmentColumn} as inv_id,
         amount,
         description,
         created_at::text as created_at
