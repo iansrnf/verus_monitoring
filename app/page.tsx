@@ -9,6 +9,7 @@ import {
   ArrowUpDown,
   Clock3,
   Download,
+  Images,
   RefreshCw,
   Save,
   Search,
@@ -40,7 +41,7 @@ type DeviceWithComputedStatus = Device & {
   statusLabel: string;
 };
 
-type DeviceTab = "online" | "offline" | "recent";
+type DeviceTab = "online" | "offline" | "recent" | "group";
 type SortDirection = "asc" | "desc";
 type SortKey = "device" | "status" | "hash" | "shares" | "cpu" | "temp" | "config" | "screenshot" | "created";
 
@@ -60,6 +61,13 @@ type ScreenshotPreview = {
   src: string;
   deviceName: string;
   createdAt: string | null;
+};
+
+type DeviceGroup = {
+  key: string;
+  label: string;
+  devices: DeviceWithComputedStatus[];
+  onlineCount: number;
 };
 
 const STALE_DEVICE_MS = 60_000;
@@ -264,6 +272,19 @@ function getDeviceDisplayName(device: Device) {
   return device.name?.trim() || "Unnamed phone";
 }
 
+function getWildcardGroupBase(device: Device) {
+  const deviceName = getDeviceDisplayName(device);
+  const match = deviceName.match(/^(.+?)(\d+).*$/);
+
+  return match?.[1]?.trim() || deviceName;
+}
+
+function getWildcardSearchValue(value: string) {
+  const trimmedValue = value.trim().toLowerCase();
+
+  return trimmedValue.endsWith("*") ? trimmedValue.slice(0, -1) : trimmedValue;
+}
+
 function getScreenshotFileName(preview: ScreenshotPreview) {
   const deviceName = preview.deviceName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "device";
   const timestamp = preview.createdAt ? new Date(preview.createdAt).toISOString().replace(/[:.]/g, "-") : "latest";
@@ -305,6 +326,38 @@ function getUniqueDevicesByName(devices: DeviceWithComputedStatus[]) {
 
     return [...matchingDevices].sort(compareDeviceFreshness)[0];
   });
+}
+
+function getDeviceGroups(devices: DeviceWithComputedStatus[]) {
+  const groupedDevices = new Map<string, DeviceWithComputedStatus[]>();
+
+  devices.forEach((device) => {
+    const groupBase = getWildcardGroupBase(device);
+    const key = groupBase.toLowerCase();
+    const matchingDevices = groupedDevices.get(key) ?? [];
+
+    matchingDevices.push(device);
+    groupedDevices.set(key, matchingDevices);
+  });
+
+  return Array.from(groupedDevices.entries())
+    .map(([key, matchingDevices]) => {
+      const sortedDevices = [...matchingDevices].sort((firstDevice, secondDevice) => {
+        const comparison = compareText(getDeviceDisplayName(firstDevice), getDeviceDisplayName(secondDevice));
+
+        return comparison || firstDevice.id - secondDevice.id;
+      });
+      const groupBase = getWildcardGroupBase(sortedDevices[0]);
+
+      return {
+        key,
+        label: `${groupBase}*`,
+        devices: sortedDevices,
+        onlineCount: sortedDevices.filter((device) => device.computedOnline).length,
+      };
+    })
+    .filter((group) => group.devices.length > 1)
+    .sort((firstGroup, secondGroup) => compareText(firstGroup.label, secondGroup.label));
 }
 
 export default function Home() {
@@ -528,6 +581,23 @@ export default function Home() {
     });
   }, [uniqueDevicesWithStatus, deviceTab, now, query, sort]);
 
+  const deviceGroups = useMemo<DeviceGroup[]>(() => getDeviceGroups(uniqueDevicesWithStatus), [uniqueDevicesWithStatus]);
+
+  const filteredDeviceGroups = useMemo(() => {
+    const needle = getWildcardSearchValue(query);
+
+    if (!needle) {
+      return deviceGroups;
+    }
+
+    return deviceGroups.filter((group) =>
+      [
+        group.label,
+        ...group.devices.map((device) => getDeviceDisplayName(device)),
+      ].some((value) => value.toLowerCase().includes(needle)),
+    );
+  }, [deviceGroups, query]);
+
   const onlineCount = uniqueDevicesWithStatus.filter((device) => device.computedOnline).length;
   const offlineCount = uniqueDevicesWithStatus.length - onlineCount;
   const recentOfflineCount = uniqueDevicesWithStatus.filter((device) => isRecentlyOffline(device, now)).length;
@@ -708,10 +778,77 @@ export default function Home() {
                 <Clock3 size={16} aria-hidden="true" />
                 <span>Recent {recentOfflineCount}</span>
               </button>
+              <button
+                className={`tab ${deviceTab === "group" ? "active" : ""}`}
+                onClick={() => setDeviceTab("group")}
+                role="tab"
+                aria-selected={deviceTab === "group"}
+              >
+                <Images size={16} aria-hidden="true" />
+                <span>Group {deviceGroups.length}</span>
+              </button>
             </div>
 
             {error ? <div className="notice">{error}</div> : null}
 
+            {deviceTab === "group" ? (
+              <section className="groupWrap" aria-label="Grouped device screenshots">
+                {loading ? (
+                  <div className="empty">Loading devices...</div>
+                ) : filteredDeviceGroups.length === 0 ? (
+                  <div className="empty">{query.trim() ? "No groups match your search." : "No device groups found."}</div>
+                ) : (
+                  filteredDeviceGroups.map((group) => (
+                    <article className="groupSection" key={group.key}>
+                      <header className="groupHeader">
+                        <div>
+                          <h2>{group.label}</h2>
+                          <span>
+                            {group.onlineCount} online / {group.devices.length - group.onlineCount} offline
+                          </span>
+                        </div>
+                        <strong>{group.devices.length}</strong>
+                      </header>
+
+                      <div className="screenshotGrid">
+                        {group.devices.map((device) => (
+                          <div className="groupDevice" key={device.id}>
+                            {device.screen_shot ? (
+                              <button
+                                className="groupScreenshot"
+                                type="button"
+                                onClick={() => openScreenshotPreview(device)}
+                                title={`Open ${getDeviceDisplayName(device)} screenshot`}
+                                aria-label={`Open ${getDeviceDisplayName(device)} screenshot`}
+                              >
+                                <Image
+                                  src={device.screen_shot}
+                                  alt={`${getDeviceDisplayName(device)} screenshot`}
+                                  width={280}
+                                  height={460}
+                                  unoptimized
+                                />
+                              </button>
+                            ) : (
+                              <div className="groupScreenshot placeholder">
+                                <Smartphone size={28} aria-hidden="true" />
+                              </div>
+                            )}
+
+                            <div className="groupDeviceName">
+                              <span className={`status ${device.computedOnline ? "online" : "offline"}`}>
+                                <span className="dot" aria-hidden="true" />
+                                <strong>{getDeviceDisplayName(device)}</strong>
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </article>
+                  ))
+                )}
+              </section>
+            ) : (
             <section className="tableWrap" aria-label="Devices">
               <table>
                 <thead>
@@ -834,6 +971,7 @@ export default function Home() {
                 </tbody>
               </table>
             </section>
+            )}
         </>
       </div>
 
