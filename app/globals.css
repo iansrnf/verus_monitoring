@@ -995,7 +995,9 @@ tr:last-child td {
 
 .investmentList {
   display: grid;
+  align-content: start;
   gap: 8px;
+  min-height: 0;
   padding: 12px;
   overflow: auto;
 }
@@ -1003,7 +1005,7 @@ tr:last-child td {
 .investmentListWrap {
   display: grid;
   min-height: 0;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
 }
 
 .investmentListHeader {
