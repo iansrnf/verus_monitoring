@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   Banknote,
+  Download,
+  FileUp,
   Plus,
   ReceiptText,
   RefreshCw,
@@ -32,6 +34,8 @@ type Investment = {
   income_count: number;
   incomes: Income[];
 };
+
+type ImportMode = "native" | "legacy";
 
 const APP_BASE_PATH = "/verus-monitoring";
 const USD_TO_PHP = 61.458;
@@ -84,6 +88,10 @@ function getProfit(investment: Investment) {
   return investment.total_income - investment.cost;
 }
 
+function getExportFileName() {
+  return `verus-investments-${new Date().toISOString().slice(0, 10)}.json`;
+}
+
 export default function InvestmentsPage() {
   const [investments, setInvestments] = useState<Investment[]>([]);
   const [selectedInvestmentId, setSelectedInvestmentId] = useState<number | null>(null);
@@ -96,6 +104,10 @@ export default function InvestmentsPage() {
   const [savingInvestment, setSavingInvestment] = useState(false);
   const [savingIncome, setSavingIncome] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importMode, setImportMode] = useState<ImportMode>("native");
+  const importInputRef = useRef<HTMLInputElement | null>(null);
+  const importModeRef = useRef<ImportMode>("native");
 
   const loadInvestments = useCallback(async (showLoading = true) => {
     if (showLoading) {
@@ -225,6 +237,77 @@ export default function InvestmentsPage() {
     await loadInvestments(false);
   }
 
+  function startImport(mode: ImportMode) {
+    importModeRef.current = mode;
+    setImportMode(mode);
+    importInputRef.current?.click();
+  }
+
+  async function importInvestments(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+
+    event.target.value = "";
+
+    if (!file) {
+      return;
+    }
+
+    setImporting(true);
+    setError(null);
+
+    try {
+      const data = JSON.parse(await file.text()) as unknown;
+      const response = await fetch(getAppPath("/api/investments/import"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: importModeRef.current, data }),
+      });
+      const result = (await response.json()) as {
+        imported?: { investments: number; incomes: number };
+        error?: string;
+      };
+
+      if (!response.ok) {
+        setError(result.error ?? "Failed to import investments.");
+        return;
+      }
+
+      await loadInvestments(false);
+      setError(`Imported ${result.imported?.investments ?? 0} investments and ${result.imported?.incomes ?? 0} income records.`);
+    } catch (importError) {
+      setError(importError instanceof Error ? importError.message : "Failed to read import file.");
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  function exportInvestments() {
+    const exportData = {
+      app: "Verus Monitoring",
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      investments: investments.map((investment) => ({
+        name: investment.name ?? "",
+        cost: investment.cost,
+        description: investment.description ?? "",
+        created_at: investment.created_at,
+        incomes: investment.incomes.map((income) => ({
+          amount: income.amount,
+          description: income.description ?? "",
+          created_at: income.created_at,
+        })),
+      })),
+    };
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+
+    link.href = url;
+    link.download = getExportFileName();
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <main className="page investmentPage">
       <div className="shell">
@@ -259,6 +342,22 @@ export default function InvestmentsPage() {
         </header>
 
         {error ? <div className="notice">{error}</div> : null}
+
+        <div className="investmentActions" aria-label="Investment import and export actions">
+          <input ref={importInputRef} type="file" accept="application/json,.json" onChange={(event) => void importInvestments(event)} />
+          <button type="button" className="loadConfig" onClick={() => startImport("legacy")} disabled={importing}>
+            <FileUp size={17} />
+            {importing && importMode === "legacy" ? "Importing..." : "Import Legacy"}
+          </button>
+          <button type="button" className="loadConfig" onClick={() => startImport("native")} disabled={importing}>
+            <FileUp size={17} />
+            {importing && importMode === "native" ? "Importing..." : "Import JSON"}
+          </button>
+          <button type="button" className="loadConfig" onClick={exportInvestments} disabled={investments.length === 0}>
+            <Download size={17} />
+            Export JSON
+          </button>
+        </div>
 
         <section className="investmentGrid">
           <aside className="investmentSidebar" aria-label="Investment list">

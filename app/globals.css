@@ -815,6 +815,17 @@ tr:last-child td {
   width: min(1280px, 100%);
 }
 
+.investmentActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.investmentActions input {
+  display: none;
+}
+
 .investmentGrid {
   display: grid;
   grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
@@ -1108,6 +1119,11 @@ tr:last-child td {
   .investmentMetrics,
   .incomeForm {
     grid-template-columns: 1fr;
+  }
+
+  .investmentActions {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .configPreview {
