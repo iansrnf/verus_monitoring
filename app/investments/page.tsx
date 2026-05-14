@@ -5,9 +5,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   Banknote,
+  BarChart3,
   Check,
   Download,
   FileUp,
+  LineChart,
   Pencil,
   Plus,
   ReceiptText,
@@ -44,6 +46,15 @@ type InvestmentMobileView = "detail" | "list" | "add";
 type InvestmentListTab = "expenditures" | "roi";
 type InvestmentSortKey = "name" | "cost" | "created_at";
 type SortDirection = "asc" | "desc";
+type InvestmentChartMode = "line" | "bar";
+
+type ChartPoint = {
+  id: string;
+  kind: "income" | "expenditure";
+  label: string;
+  amount: number;
+  timestamp: number;
+};
 
 const APP_BASE_PATH = "/verus-monitoring";
 const USD_TO_PHP = 61.458;
@@ -127,6 +138,7 @@ export default function InvestmentsPage() {
   const [investmentQuery, setInvestmentQuery] = useState("");
   const [investmentSortKey, setInvestmentSortKey] = useState<InvestmentSortKey>("created_at");
   const [investmentSortDirection, setInvestmentSortDirection] = useState<SortDirection>("desc");
+  const [chartMode, setChartMode] = useState<InvestmentChartMode>("line");
   const [editingInvestmentId, setEditingInvestmentId] = useState<number | null>(null);
   const [editingIncomeId, setEditingIncomeId] = useState<number | null>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
@@ -216,6 +228,77 @@ export default function InvestmentsPage() {
       return investmentSortDirection === "asc" ? comparison : -comparison;
     });
   }, [investmentGroups, investmentListTab, investmentQuery, investmentSortDirection, investmentSortKey]);
+
+  const chart = useMemo(() => {
+    const points: ChartPoint[] = investments.flatMap((investment) => {
+      const investmentDate = new Date(investment.created_at ?? "").getTime();
+      const expenditurePoints: ChartPoint[] =
+        Number.isFinite(investmentDate) && investment.cost > 0
+          ? [
+              {
+                id: `investment-${investment.id}`,
+                kind: "expenditure",
+                label: getInvestmentName(investment),
+                amount: investment.cost,
+                timestamp: investmentDate,
+              },
+            ]
+          : [];
+      const incomePoints = investment.incomes.flatMap((income) => {
+        const incomeDate = new Date(income.created_at ?? "").getTime();
+
+        if (!Number.isFinite(incomeDate) || income.amount <= 0) {
+          return [];
+        }
+
+        return [
+          {
+            id: `income-${income.id}`,
+            kind: "income" as const,
+            label: `${getInvestmentName(investment)}: ${income.description || "Income"}`,
+            amount: income.amount,
+            timestamp: incomeDate,
+          },
+        ];
+      });
+
+      return [...expenditurePoints, ...incomePoints];
+    });
+
+    const sortedPoints = [...points].sort((firstPoint, secondPoint) => firstPoint.timestamp - secondPoint.timestamp);
+    const minTime = Math.min(...sortedPoints.map((point) => point.timestamp));
+    const maxTime = Math.max(...sortedPoints.map((point) => point.timestamp));
+    const maxAmount = Math.max(...sortedPoints.map((point) => point.amount), 1);
+    const padding = { top: 22, right: 26, bottom: 32, left: 86 };
+    const width = 720;
+    const height = 320;
+    const plotWidth = width - padding.left - padding.right;
+    const plotHeight = height - padding.top - padding.bottom;
+    const timeSpan = Math.max(maxTime - minTime, 1);
+    const getX = (amount: number) => padding.left + (amount / maxAmount) * plotWidth;
+    const getY = (timestamp: number) => padding.top + ((timestamp - minTime) / timeSpan) * plotHeight;
+    const incomePoints = sortedPoints.filter((point) => point.kind === "income");
+    const expenditurePoints = sortedPoints.filter((point) => point.kind === "expenditure");
+    const lineFor = (linePoints: ChartPoint[]) => linePoints.map((point) => `${getX(point.amount)},${getY(point.timestamp)}`).join(" ");
+    const timeTicks = [0, 0.5, 1].map((position) => minTime + timeSpan * position);
+    const amountTicks = [0, 0.5, 1].map((position) => maxAmount * position);
+
+    return {
+      amountTicks,
+      expenditureLine: lineFor(expenditurePoints),
+      expenditurePoints,
+      getX,
+      getY,
+      height,
+      incomeLine: lineFor(incomePoints),
+      incomePoints,
+      padding,
+      points: sortedPoints,
+      plotHeight,
+      timeTicks,
+      width,
+    };
+  }, [investments]);
 
   function toggleInvestmentSort(key: InvestmentSortKey) {
     if (investmentSortKey === key) {
@@ -521,6 +604,127 @@ export default function InvestmentsPage() {
             Export JSON
           </button>
         </div>
+
+        <section className="investmentChartPanel" aria-label="Investment value by date chart">
+          <div className="investmentChartHeader">
+            <div>
+              <span>Value by DateTime</span>
+              <strong>Income vs Expenditures</strong>
+            </div>
+            <div className="chartModeTabs" role="tablist" aria-label="Chart display mode">
+              <button
+                type="button"
+                className={chartMode === "line" ? "active" : ""}
+                onClick={() => setChartMode("line")}
+                role="tab"
+                aria-selected={chartMode === "line"}
+              >
+                <LineChart size={16} />
+                Line
+              </button>
+              <button
+                type="button"
+                className={chartMode === "bar" ? "active" : ""}
+                onClick={() => setChartMode("bar")}
+                role="tab"
+                aria-selected={chartMode === "bar"}
+              >
+                <BarChart3 size={16} />
+                Bar
+              </button>
+            </div>
+          </div>
+
+          {chart.points.length === 0 ? (
+            <div className="empty">No chart data yet.</div>
+          ) : (
+            <div className="investmentChartWrap">
+              <svg className="investmentChart" viewBox={`0 0 ${chart.width} ${chart.height}`} role="img" aria-label="Income and expenditure chart">
+                <line
+                  className="chartAxis"
+                  x1={chart.padding.left}
+                  x2={chart.width - chart.padding.right}
+                  y1={chart.padding.top + chart.plotHeight}
+                  y2={chart.padding.top + chart.plotHeight}
+                />
+                <line
+                  className="chartAxis"
+                  x1={chart.padding.left}
+                  x2={chart.padding.left}
+                  y1={chart.padding.top}
+                  y2={chart.padding.top + chart.plotHeight}
+                />
+
+                {chart.timeTicks.map((timestamp) => {
+                  const y = chart.getY(timestamp);
+
+                  return (
+                    <g key={`time-${timestamp}`}>
+                      <line className="chartGridLine" x1={chart.padding.left} x2={chart.width - chart.padding.right} y1={y} y2={y} />
+                      <text className="chartTick" x={chart.padding.left - 10} y={y + 4} textAnchor="end">
+                        {formatDate(new Date(timestamp).toISOString())}
+                      </text>
+                    </g>
+                  );
+                })}
+
+                {chart.amountTicks.map((amount) => {
+                  const x = chart.getX(amount);
+
+                  return (
+                    <g key={`amount-${amount}`}>
+                      <line className="chartGridLine" x1={x} x2={x} y1={chart.padding.top} y2={chart.padding.top + chart.plotHeight} />
+                      <text className="chartTick" x={x} y={chart.height - 8} textAnchor="middle">
+                        {formatUsd(amount)}
+                      </text>
+                    </g>
+                  );
+                })}
+
+                {chartMode === "line" ? (
+                  <>
+                    {chart.expenditureLine ? <polyline className="chartLine expenditure" points={chart.expenditureLine} /> : null}
+                    {chart.incomeLine ? <polyline className="chartLine income" points={chart.incomeLine} /> : null}
+                  </>
+                ) : null}
+
+                {chart.points.map((point) => {
+                  const x = chart.getX(point.amount);
+                  const y = chart.getY(point.timestamp);
+                  const className = point.kind === "income" ? "income" : "expenditure";
+
+                  return chartMode === "bar" ? (
+                    <rect
+                      className={`chartBar ${className}`}
+                      key={point.id}
+                      x={chart.padding.left}
+                      y={y - 4}
+                      width={Math.max(2, x - chart.padding.left)}
+                      height={8}
+                      rx={4}
+                    >
+                      <title>{`${point.label} - ${formatMoney(point.amount)} - ${formatDate(new Date(point.timestamp).toISOString())}`}</title>
+                    </rect>
+                  ) : (
+                    <circle className={`chartDot ${className}`} key={point.id} cx={x} cy={y} r={4.5}>
+                      <title>{`${point.label} - ${formatMoney(point.amount)} - ${formatDate(new Date(point.timestamp).toISOString())}`}</title>
+                    </circle>
+                  );
+                })}
+              </svg>
+              <div className="chartLegend" aria-label="Chart legend">
+                <span>
+                  <i className="income" />
+                  Income
+                </span>
+                <span>
+                  <i className="expenditure" />
+                  Expenditures
+                </span>
+              </div>
+            </div>
+          )}
+        </section>
 
         <div className="investmentMobileTabs" role="tablist" aria-label="Investment views">
           <button

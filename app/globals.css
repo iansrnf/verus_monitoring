@@ -830,6 +830,149 @@ tr:last-child td {
   display: none;
 }
 
+.investmentChartPanel {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.investmentChartHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel-strong);
+  padding: 14px 16px;
+}
+
+.investmentChartHeader span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.investmentChartHeader strong {
+  display: block;
+  margin-top: 4px;
+}
+
+.chartModeTabs {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  border-radius: 8px;
+  padding: 5px;
+}
+
+.chartModeTabs button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 34px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  border-radius: 6px;
+  padding: 0 12px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.chartModeTabs button:hover,
+.chartModeTabs button:focus-visible,
+.chartModeTabs button.active {
+  background: var(--panel-strong);
+  color: var(--text);
+}
+
+.investmentChartWrap {
+  overflow-x: auto;
+  padding: 14px;
+}
+
+.investmentChart {
+  display: block;
+  width: 100%;
+  min-width: 720px;
+  height: auto;
+}
+
+.chartAxis {
+  stroke: #59616d;
+  stroke-width: 1.4;
+}
+
+.chartGridLine {
+  stroke: rgba(157, 165, 177, 0.16);
+  stroke-width: 1;
+}
+
+.chartTick {
+  fill: var(--muted);
+  font-size: 11px;
+}
+
+.chartLine {
+  fill: none;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.chartLine.income,
+.chartDot.income,
+.chartBar.income,
+.chartLegend i.income {
+  stroke: var(--online);
+  fill: var(--online);
+}
+
+.chartLine.expenditure,
+.chartDot.expenditure,
+.chartBar.expenditure,
+.chartLegend i.expenditure {
+  stroke: var(--offline);
+  fill: var(--offline);
+}
+
+.chartBar {
+  opacity: 0.72;
+}
+
+.chartDot {
+  stroke-width: 2;
+}
+
+.chartLegend {
+  display: flex;
+  justify-content: flex-end;
+  gap: 14px;
+  padding-top: 10px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.chartLegend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.chartLegend i {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+}
+
 .investmentGrid {
   display: grid;
   grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
@@ -1359,6 +1502,15 @@ tr:last-child td {
     min-width: 0;
     padding: 0 10px;
     font-size: 13px;
+  }
+
+  .investmentChartHeader {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .chartModeTabs {
+    width: 100%;
   }
 
   .investmentMobileTabs {
