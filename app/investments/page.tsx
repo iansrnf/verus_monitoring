@@ -275,11 +275,11 @@ export default function InvestmentsPage() {
     const plotWidth = width - padding.left - padding.right;
     const plotHeight = height - padding.top - padding.bottom;
     const timeSpan = Math.max(maxTime - minTime, 1);
-    const getX = (amount: number) => padding.left + (amount / maxAmount) * plotWidth;
-    const getY = (timestamp: number) => padding.top + ((timestamp - minTime) / timeSpan) * plotHeight;
+    const getX = (timestamp: number) => padding.left + ((timestamp - minTime) / timeSpan) * plotWidth;
+    const getY = (amount: number) => padding.top + plotHeight - (amount / maxAmount) * plotHeight;
     const incomePoints = sortedPoints.filter((point) => point.kind === "income");
     const expenditurePoints = sortedPoints.filter((point) => point.kind === "expenditure");
-    const lineFor = (linePoints: ChartPoint[]) => linePoints.map((point) => `${getX(point.amount)},${getY(point.timestamp)}`).join(" ");
+    const lineFor = (linePoints: ChartPoint[]) => linePoints.map((point) => `${getX(point.timestamp)},${getY(point.amount)}`).join(" ");
     const timeTicks = [0, 0.5, 1].map((position) => minTime + timeSpan * position);
     const amountTicks = [0, 0.5, 1].map((position) => maxAmount * position);
 
@@ -608,7 +608,7 @@ export default function InvestmentsPage() {
         <section className="investmentChartPanel" aria-label="Investment value by date chart">
           <div className="investmentChartHeader">
             <div>
-              <span>Value by DateTime</span>
+              <span>DateTime by Value</span>
               <strong>Income vs Expenditures</strong>
             </div>
             <div className="chartModeTabs" role="tablist" aria-label="Chart display mode">
@@ -656,12 +656,12 @@ export default function InvestmentsPage() {
                 />
 
                 {chart.timeTicks.map((timestamp) => {
-                  const y = chart.getY(timestamp);
+                  const x = chart.getX(timestamp);
 
                   return (
                     <g key={`time-${timestamp}`}>
-                      <line className="chartGridLine" x1={chart.padding.left} x2={chart.width - chart.padding.right} y1={y} y2={y} />
-                      <text className="chartTick" x={chart.padding.left - 10} y={y + 4} textAnchor="end">
+                      <line className="chartGridLine" x1={x} x2={x} y1={chart.padding.top} y2={chart.padding.top + chart.plotHeight} />
+                      <text className="chartTick" x={x} y={chart.height - 8} textAnchor="middle">
                         {formatDate(new Date(timestamp).toISOString())}
                       </text>
                     </g>
@@ -669,12 +669,12 @@ export default function InvestmentsPage() {
                 })}
 
                 {chart.amountTicks.map((amount) => {
-                  const x = chart.getX(amount);
+                  const y = chart.getY(amount);
 
                   return (
                     <g key={`amount-${amount}`}>
-                      <line className="chartGridLine" x1={x} x2={x} y1={chart.padding.top} y2={chart.padding.top + chart.plotHeight} />
-                      <text className="chartTick" x={x} y={chart.height - 8} textAnchor="middle">
+                      <line className="chartGridLine" x1={chart.padding.left} x2={chart.width - chart.padding.right} y1={y} y2={y} />
+                      <text className="chartTick" x={chart.padding.left - 10} y={y + 4} textAnchor="end">
                         {formatUsd(amount)}
                       </text>
                     </g>
@@ -689,18 +689,18 @@ export default function InvestmentsPage() {
                 ) : null}
 
                 {chart.points.map((point) => {
-                  const x = chart.getX(point.amount);
-                  const y = chart.getY(point.timestamp);
+                  const x = chart.getX(point.timestamp);
+                  const y = chart.getY(point.amount);
                   const className = point.kind === "income" ? "income" : "expenditure";
 
                   return chartMode === "bar" ? (
                     <rect
                       className={`chartBar ${className}`}
                       key={point.id}
-                      x={chart.padding.left}
-                      y={y - 4}
-                      width={Math.max(2, x - chart.padding.left)}
-                      height={8}
+                      x={x - 4}
+                      y={y}
+                      width={8}
+                      height={Math.max(2, chart.padding.top + chart.plotHeight - y)}
                       rx={4}
                     >
                       <title>{`${point.label} - ${formatMoney(point.amount)} - ${formatDate(new Date(point.timestamp).toISOString())}`}</title>
