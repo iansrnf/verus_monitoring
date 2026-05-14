@@ -24,6 +24,7 @@ import {
   ZoomOut,
 } from "lucide-react";
 import { miningConfigs } from "@/lib/configs";
+import { LogoutButton } from "@/app/components/LogoutButton";
 
 type Device = {
   id: number;
@@ -638,6 +639,7 @@ export default function Home() {
               <WalletCards size={16} />
               Investment Dashboard
             </Link>
+            <LogoutButton />
           </div>
 
           <div className="summary" aria-label="Device summary">

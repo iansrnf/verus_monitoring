@@ -76,6 +76,10 @@ select {
   text-decoration: none;
 }
 
+.logoutButton {
+  cursor: pointer;
+}
+
 .backLink {
   margin: 0 0 12px;
 }
@@ -809,6 +813,71 @@ tr:last-child td {
   padding: 42px 18px;
   color: var(--muted);
   text-align: center;
+}
+
+.loginPage {
+  display: grid;
+  place-items: center;
+}
+
+.loginPanel {
+  display: grid;
+  gap: 14px;
+  width: min(420px, 100%);
+  border: 1px solid var(--line);
+  background: var(--panel);
+  border-radius: 8px;
+  padding: 24px;
+}
+
+.loginIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border: 1px solid rgba(125, 211, 252, 0.45);
+  background: rgba(125, 211, 252, 0.12);
+  border-radius: 8px;
+  color: var(--accent);
+}
+
+.loginPanel h1 {
+  margin: 0;
+  font-size: 30px;
+  line-height: 1.1;
+}
+
+.loginPanel p {
+  margin: -6px 0 0;
+  color: var(--muted);
+}
+
+.loginPanel label {
+  display: grid;
+  gap: 7px;
+}
+
+.loginPanel label span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.loginPanel input {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  outline: 0;
+  background: var(--panel-strong);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 0 12px;
+}
+
+.loginPanel input:focus {
+  border-color: var(--accent);
 }
 
 .investmentPage .shell {

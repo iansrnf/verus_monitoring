@@ -21,6 +21,7 @@ import {
   WalletCards,
   X,
 } from "lucide-react";
+import { LogoutButton } from "@/app/components/LogoutButton";
 
 type Income = {
   id: number;
@@ -566,6 +567,7 @@ export default function InvestmentsPage() {
             </Link>
             <h1>Investment Dashboard</h1>
             <p>Track expenditures like phones and services, then record income against each investment.</p>
+            <LogoutButton />
           </div>
 
           <div className="summary" aria-label="Investment summary">
