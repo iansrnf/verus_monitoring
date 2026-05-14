@@ -12,6 +12,7 @@ import {
   FolderOpen,
   Images,
   LineChart,
+  Clipboard,
   MoveDown,
   MoveUp,
   Pencil,
@@ -73,6 +74,36 @@ const USD_TO_PHP = 61.458;
 const MAX_MERGED_IMAGE_WIDTH = 2400;
 const MAX_MERGED_IMAGE_HEIGHT = 30000;
 const IMAGE_FILE_EXTENSION_PATTERN = /\.(avif|bmp|gif|jpe?g|png|webp)$/i;
+const DEVICE_TOTALS_PROMPT = `Analyze the stitched screenshot image I attach.
+
+The image contains one or more Devices tables. Each row has columns similar to:
+Device, Country, Usage, Rate, Amount.
+
+Please OCR every visible row and summarize totals by device name prefix.
+
+Rules:
+1. Treat names with the same text prefix and a trailing number as one group.
+   Examples:
+   - samuelhny1, samuelhny2, samuelhny7 => samuelhny*
+   - xavierhny1, xavierhny2, xavierhny7 => xavierhny*
+   - boyetproton1, boyetproton7 => boyetproton*
+2. If a device name has no trailing number, keep it as its own group.
+3. Use the Amount column for totals. Amount values are USD.
+4. Count how many rows/devices are included in each group.
+5. Include the device names that were grouped under each prefix.
+6. If a row is repeated across screenshots, count it only once when the same device name appears again with the same usage and amount.
+7. Show uncertain OCR rows separately instead of guessing.
+
+Return the result in this format:
+
+| Group | Devices Count | Total Amount | Device Names |
+|---|---:|---:|---|
+| samuelhny* | 7 | $0.000 | samuelhny1, samuelhny2, ... |
+
+Then add:
+- Grand total amount
+- Grand total devices counted
+- Uncertain rows, if any`;
 
 function getAppPath(path: string) {
   return `${APP_BASE_PATH}${path}`;
@@ -171,6 +202,7 @@ export default function InvestmentsPage() {
   const [imageMergeItems, setImageMergeItems] = useState<ImageMergeItem[]>([]);
   const [imageMergeError, setImageMergeError] = useState<string | null>(null);
   const [mergingImages, setMergingImages] = useState(false);
+  const [promptCopied, setPromptCopied] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const imageMergeInputRef = useRef<HTMLInputElement | null>(null);
   const imageMergeItemsRef = useRef<ImageMergeItem[]>([]);
@@ -714,6 +746,16 @@ export default function InvestmentsPage() {
       setImageMergeError(mergeError instanceof Error ? mergeError.message : "Failed to merge screenshots.");
     } finally {
       setMergingImages(false);
+    }
+  }
+
+  async function copyDeviceTotalsPrompt() {
+    try {
+      await navigator.clipboard.writeText(DEVICE_TOTALS_PROMPT);
+      setPromptCopied(true);
+      window.setTimeout(() => setPromptCopied(false), 1800);
+    } catch {
+      setImageMergeError("Your browser blocked clipboard access. Select the prompt text and copy it manually.");
     }
   }
 
@@ -1279,6 +1321,18 @@ export default function InvestmentsPage() {
           </div>
 
           <div className="imageMergerBody">
+            <section className="aiPromptTool" aria-label="AI device totals prompt">
+              <div>
+                <span>AI Prompt</span>
+                <strong>Summarize device totals from stitched image</strong>
+              </div>
+              <button type="button" className="loadConfig" onClick={() => void copyDeviceTotalsPrompt()}>
+                <Clipboard size={17} />
+                {promptCopied ? "Copied" : "Copy Prompt"}
+              </button>
+              <textarea value={DEVICE_TOTALS_PROMPT} readOnly aria-label="Prompt for AI device totals" />
+            </section>
+
             <input
               ref={imageMergeInputRef}
               type="file"

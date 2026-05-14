@@ -993,6 +993,49 @@ tr:last-child td {
   display: none;
 }
 
+.aiPromptTool {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.aiPromptTool span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.aiPromptTool strong {
+  display: block;
+  margin-top: 4px;
+}
+
+.aiPromptTool textarea {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-height: 150px;
+  resize: vertical;
+  border: 1px solid var(--line);
+  outline: 0;
+  background: var(--panel-strong);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 10px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.aiPromptTool textarea:focus {
+  border-color: var(--accent);
+}
+
 .imageDropzone {
   display: flex;
   min-height: 150px;
@@ -1956,6 +1999,14 @@ tr:last-child td {
   .toolModalFooter {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .aiPromptTool {
+    grid-template-columns: 1fr;
+  }
+
+  .aiPromptTool .loadConfig {
+    width: 100%;
   }
 
   .imageMergeItem {
