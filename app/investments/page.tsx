@@ -5,8 +5,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   Banknote,
+  Check,
   Download,
   FileUp,
+  Pencil,
   Plus,
   ReceiptText,
   RefreshCw,
@@ -14,6 +16,7 @@ import {
   TrendingDown,
   TrendingUp,
   WalletCards,
+  X,
 } from "lucide-react";
 
 type Income = {
@@ -102,15 +105,24 @@ export default function InvestmentsPage() {
   const [investmentDescription, setInvestmentDescription] = useState("");
   const [incomeAmount, setIncomeAmount] = useState("");
   const [incomeDescription, setIncomeDescription] = useState("");
+  const [editInvestmentName, setEditInvestmentName] = useState("");
+  const [editInvestmentCost, setEditInvestmentCost] = useState("");
+  const [editInvestmentDescription, setEditInvestmentDescription] = useState("");
+  const [editIncomeAmount, setEditIncomeAmount] = useState("");
+  const [editIncomeDescription, setEditIncomeDescription] = useState("");
   const [loading, setLoading] = useState(true);
   const [savingInvestment, setSavingInvestment] = useState(false);
   const [savingIncome, setSavingIncome] = useState(false);
+  const [savingInvestmentEdit, setSavingInvestmentEdit] = useState(false);
+  const [savingIncomeEditId, setSavingIncomeEditId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const [importMode, setImportMode] = useState<ImportMode>("native");
   const [showInvestmentForm, setShowInvestmentForm] = useState(false);
   const [mobileView, setMobileView] = useState<InvestmentMobileView>("detail");
   const [investmentListTab, setInvestmentListTab] = useState<InvestmentListTab>("expenditures");
+  const [editingInvestmentId, setEditingInvestmentId] = useState<number | null>(null);
+  const [editingIncomeId, setEditingIncomeId] = useState<number | null>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const importModeRef = useRef<ImportMode>("native");
 
@@ -252,6 +264,91 @@ export default function InvestmentsPage() {
     }
 
     await loadInvestments(false);
+  }
+
+  function beginEditInvestment(investment: Investment) {
+    setEditingInvestmentId(investment.id);
+    setEditInvestmentName(investment.name ?? "");
+    setEditInvestmentCost(String(investment.cost ?? ""));
+    setEditInvestmentDescription(investment.description ?? "");
+    setError(null);
+  }
+
+  function cancelEditInvestment() {
+    setEditingInvestmentId(null);
+    setEditInvestmentName("");
+    setEditInvestmentCost("");
+    setEditInvestmentDescription("");
+  }
+
+  async function updateInvestment(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!selectedInvestment || editingInvestmentId !== selectedInvestment.id) {
+      return;
+    }
+
+    setSavingInvestmentEdit(true);
+    setError(null);
+
+    const response = await fetch(getAppPath(`/api/investments/${selectedInvestment.id}`), {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: editInvestmentName,
+        cost: editInvestmentCost,
+        description: editInvestmentDescription,
+      }),
+    });
+    const result = (await response.json()) as { error?: string };
+
+    if (!response.ok) {
+      setError(result.error ?? "Failed to update investment.");
+    } else {
+      cancelEditInvestment();
+      await loadInvestments(false);
+    }
+
+    setSavingInvestmentEdit(false);
+  }
+
+  function beginEditIncome(income: Income) {
+    setEditingIncomeId(income.id);
+    setEditIncomeAmount(String(income.amount ?? ""));
+    setEditIncomeDescription(income.description ?? "");
+    setError(null);
+  }
+
+  function cancelEditIncome() {
+    setEditingIncomeId(null);
+    setEditIncomeAmount("");
+    setEditIncomeDescription("");
+  }
+
+  async function updateIncome(event: React.FormEvent<HTMLFormElement>, incomeId: number) {
+    event.preventDefault();
+
+    setSavingIncomeEditId(incomeId);
+    setError(null);
+
+    const response = await fetch(getAppPath(`/api/income/${incomeId}`), {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        amount: editIncomeAmount,
+        description: editIncomeDescription,
+      }),
+    });
+    const result = (await response.json()) as { error?: string };
+
+    if (!response.ok) {
+      setError(result.error ?? "Failed to update income.");
+    } else {
+      cancelEditIncome();
+      await loadInvestments(false);
+    }
+
+    setSavingIncomeEditId(null);
   }
 
   function startImport(mode: ImportMode) {
@@ -537,16 +634,54 @@ export default function InvestmentsPage() {
                     <h2>{getInvestmentName(selectedInvestment)}</h2>
                     <p>{selectedInvestment.description || "No description."}</p>
                   </div>
-                  <button
-                    className="dangerIcon"
-                    type="button"
-                    onClick={() => void deleteInvestment(selectedInvestment.id)}
-                    aria-label="Delete investment"
-                    title="Delete investment"
-                  >
-                    <Trash2 size={17} />
-                  </button>
+                  <div className="detailActions">
+                    <button
+                      className="iconButton"
+                      type="button"
+                      onClick={() => beginEditInvestment(selectedInvestment)}
+                      aria-label="Edit investment"
+                      title="Edit investment"
+                    >
+                      <Pencil size={17} />
+                    </button>
+                    <button
+                      className="dangerIcon"
+                      type="button"
+                      onClick={() => void deleteInvestment(selectedInvestment.id)}
+                      aria-label="Delete investment"
+                      title="Delete investment"
+                    >
+                      <Trash2 size={17} />
+                    </button>
+                  </div>
                 </div>
+
+                {editingInvestmentId === selectedInvestment.id ? (
+                  <form className="editInvestmentForm" onSubmit={updateInvestment}>
+                    <label>
+                      <span>Name</span>
+                      <input value={editInvestmentName} onChange={(event) => setEditInvestmentName(event.target.value)} />
+                    </label>
+                    <label>
+                      <span>Cost</span>
+                      <input value={editInvestmentCost} onChange={(event) => setEditInvestmentCost(event.target.value)} inputMode="decimal" />
+                    </label>
+                    <label>
+                      <span>Description</span>
+                      <input value={editInvestmentDescription} onChange={(event) => setEditInvestmentDescription(event.target.value)} />
+                    </label>
+                    <div className="editActions">
+                      <button className="loadConfig" type="submit" disabled={savingInvestmentEdit}>
+                        <Check size={17} />
+                        {savingInvestmentEdit ? "Saving..." : "Save"}
+                      </button>
+                      <button className="secondaryButton" type="button" onClick={cancelEditInvestment}>
+                        <X size={17} />
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                ) : null}
 
                 <div className="investmentMetrics">
                   <div>
@@ -603,14 +738,48 @@ export default function InvestmentsPage() {
                   ) : (
                     selectedInvestment.incomes.map((income) => (
                       <div className="incomeItem" key={income.id}>
-                        <div>
-                          <strong>{formatMoney(income.amount)}</strong>
-                          <span>{income.description || "Income"}</span>
-                          <small>{formatDate(income.created_at)}</small>
-                        </div>
-                        <button type="button" onClick={() => void deleteIncome(income.id)} aria-label="Delete income" title="Delete income">
-                          <Trash2 size={16} />
-                        </button>
+                        {editingIncomeId === income.id ? (
+                          <form className="incomeEditForm" onSubmit={(event) => void updateIncome(event, income.id)}>
+                            <label>
+                              <span>Amount</span>
+                              <input value={editIncomeAmount} onChange={(event) => setEditIncomeAmount(event.target.value)} inputMode="decimal" />
+                            </label>
+                            <label>
+                              <span>Description</span>
+                              <input value={editIncomeDescription} onChange={(event) => setEditIncomeDescription(event.target.value)} />
+                            </label>
+                            <div className="incomeItemActions">
+                              <button type="submit" disabled={savingIncomeEditId === income.id} aria-label="Save income" title="Save income">
+                                <Check size={16} />
+                              </button>
+                              <button type="button" onClick={cancelEditIncome} aria-label="Cancel income edit" title="Cancel">
+                                <X size={16} />
+                              </button>
+                            </div>
+                          </form>
+                        ) : (
+                          <>
+                            <div>
+                              <strong>{formatMoney(income.amount)}</strong>
+                              <span>{income.description || "Income"}</span>
+                              <small>{formatDate(income.created_at)}</small>
+                            </div>
+                            <div className="incomeItemActions">
+                              <button type="button" onClick={() => beginEditIncome(income)} aria-label="Edit income" title="Edit income">
+                                <Pencil size={16} />
+                              </button>
+                              <button
+                                className="dangerIcon"
+                                type="button"
+                                onClick={() => void deleteIncome(income.id)}
+                                aria-label="Delete income"
+                                title="Delete income"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          </>
+                        )}
                       </div>
                     ))
                   )}
