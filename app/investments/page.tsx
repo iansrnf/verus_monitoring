@@ -170,8 +170,8 @@ export default function InvestmentsPage() {
   }, [investments]);
 
   const investmentGroups = useMemo(() => {
-    const expenditures = investments.filter((investment) => getProfit(investment) < 0);
-    const roi = investments.filter((investment) => getProfit(investment) >= 0);
+    const expenditures = investments.filter((investment) => investment.total_income <= 0 || getProfit(investment) < 0);
+    const roi = investments.filter((investment) => investment.total_income > 0 && getProfit(investment) >= 0);
 
     return { expenditures, roi };
   }, [investments]);
