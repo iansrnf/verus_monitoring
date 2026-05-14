@@ -1154,8 +1154,11 @@ tr:last-child td {
 }
 
 .investmentItem b {
-  flex: 0 0 auto;
+  flex: 0 1 150px;
   font-size: 14px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+  text-align: right;
 }
 
 .detailHeader h2 {

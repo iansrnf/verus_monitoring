@@ -438,15 +438,15 @@ export default function InvestmentsPage() {
           <div className="summary" aria-label="Investment summary">
             <div className="metric">
               <span>Expenditures</span>
-              <strong>{formatUsd(totals.cost)}</strong>
+              <strong>{formatMoney(totals.cost)}</strong>
             </div>
             <div className="metric">
               <span>Income</span>
-              <strong>{formatUsd(totals.income)}</strong>
+              <strong>{formatMoney(totals.income)}</strong>
             </div>
             <div className={`metric ${totals.profit >= 0 ? "positiveMetric" : "negativeMetric"}`}>
               <span>Balance</span>
-              <strong>{formatUsd(totals.profit)}</strong>
+              <strong>{formatMoney(totals.profit)}</strong>
             </div>
             <div className="metric">
               <span>Investments</span>
@@ -616,7 +616,7 @@ export default function InvestmentsPage() {
                           <strong>{getInvestmentName(investment)}</strong>
                           <small>{investment.income_count} income records</small>
                         </span>
-                        <b className={profit >= 0 ? "positiveText" : "negativeText"}>{formatUsd(profit)}</b>
+                        <b className={profit >= 0 ? "positiveText" : "negativeText"}>{formatMoney(profit)}</b>
                       </button>
                     );
                   })
