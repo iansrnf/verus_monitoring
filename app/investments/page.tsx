@@ -139,6 +139,7 @@ export default function InvestmentsPage() {
   const [investmentSortKey, setInvestmentSortKey] = useState<InvestmentSortKey>("created_at");
   const [investmentSortDirection, setInvestmentSortDirection] = useState<SortDirection>("desc");
   const [chartMode, setChartMode] = useState<InvestmentChartMode>("line");
+  const [showChart, setShowChart] = useState(false);
   const [editingInvestmentId, setEditingInvestmentId] = useState<number | null>(null);
   const [editingIncomeId, setEditingIncomeId] = useState<number | null>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
@@ -611,31 +612,38 @@ export default function InvestmentsPage() {
               <span>DateTime by Value</span>
               <strong>Income vs Expenditures</strong>
             </div>
-            <div className="chartModeTabs" role="tablist" aria-label="Chart display mode">
-              <button
-                type="button"
-                className={chartMode === "line" ? "active" : ""}
-                onClick={() => setChartMode("line")}
-                role="tab"
-                aria-selected={chartMode === "line"}
-              >
-                <LineChart size={16} />
-                Line
-              </button>
-              <button
-                type="button"
-                className={chartMode === "bar" ? "active" : ""}
-                onClick={() => setChartMode("bar")}
-                role="tab"
-                aria-selected={chartMode === "bar"}
-              >
-                <BarChart3 size={16} />
-                Bar
+            <div className="chartHeaderActions">
+              {showChart ? (
+                <div className="chartModeTabs" role="tablist" aria-label="Chart display mode">
+                  <button
+                    type="button"
+                    className={chartMode === "line" ? "active" : ""}
+                    onClick={() => setChartMode("line")}
+                    role="tab"
+                    aria-selected={chartMode === "line"}
+                  >
+                    <LineChart size={16} />
+                    Line
+                  </button>
+                  <button
+                    type="button"
+                    className={chartMode === "bar" ? "active" : ""}
+                    onClick={() => setChartMode("bar")}
+                    role="tab"
+                    aria-selected={chartMode === "bar"}
+                  >
+                    <BarChart3 size={16} />
+                    Bar
+                  </button>
+                </div>
+              ) : null}
+              <button className="secondaryButton" type="button" onClick={() => setShowChart((currentValue) => !currentValue)}>
+                {showChart ? "Hide Graph" : "Show Graph"}
               </button>
             </div>
           </div>
 
-          {chart.points.length === 0 ? (
+          {!showChart ? null : chart.points.length === 0 ? (
             <div className="empty">No chart data yet.</div>
           ) : (
             <div className="investmentChartWrap">
