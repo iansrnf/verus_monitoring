@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { getAdminPassword, getAdminUsername } from "@/lib/admin-config";
 import { isValidAdminSessionToken } from "@/lib/admin-session";
 
 const APP_BASE_PATH = "/verus-monitoring";
@@ -36,10 +37,9 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const expectedUsername = process.env.ADMIN_USERNAME?.trim();
-  const expectedPassword = process.env.ADMIN_PASSWORD?.trim();
+  const adminLoginEnabled = Boolean(getAdminUsername() && getAdminPassword());
 
-  if (!expectedUsername || !expectedPassword) {
+  if (!adminLoginEnabled) {
     return NextResponse.next();
   }
 
