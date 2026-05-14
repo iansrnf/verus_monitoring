@@ -70,6 +70,9 @@ type ChartPoint = {
 
 const APP_BASE_PATH = "/verus-monitoring";
 const USD_TO_PHP = 61.458;
+const MAX_MERGED_IMAGE_WIDTH = 2400;
+const MAX_MERGED_IMAGE_HEIGHT = 30000;
+const IMAGE_FILE_EXTENSION_PATTERN = /\.(avif|bmp|gif|jpe?g|png|webp)$/i;
 
 function getAppPath(path: string) {
   return `${APP_BASE_PATH}${path}`;
@@ -92,6 +95,16 @@ function formatPhp(value: number) {
 
 function formatMoney(value: number) {
   return `${formatUsd(value)} / ${formatPhp(value)}`;
+}
+
+function createLocalId(prefix: string) {
+  const randomId = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : Math.random().toString(36).slice(2);
+
+  return `${prefix}-${Date.now()}-${randomId}`;
+}
+
+function isImageFile(file: File) {
+  return file.type.startsWith("image/") || IMAGE_FILE_EXTENSION_PATTERN.test(file.name);
 }
 
 function formatDate(value: string | null) {
@@ -584,23 +597,27 @@ export default function InvestmentsPage() {
   }
 
   function addImageMergeFiles(files: FileList | File[]) {
-    const imageFiles = Array.from(files).filter((file) => file.type.startsWith("image/"));
+    const imageFiles = Array.from(files).filter(isImageFile);
 
     if (imageFiles.length === 0) {
       setImageMergeError("Drop or select PNG/JPG/WebP screenshot files.");
       return;
     }
 
-    setImageMergeError(null);
-    setImageMergeItems((currentItems) => [
-      ...currentItems,
-      ...imageFiles.map((file) => ({
-        id: `${file.name}-${file.lastModified}-${crypto.randomUUID()}`,
-        name: file.name,
-        size: file.size,
-        url: URL.createObjectURL(file),
-      })),
-    ]);
+    try {
+      setImageMergeError(null);
+      setImageMergeItems((currentItems) => [
+        ...currentItems,
+        ...imageFiles.map((file) => ({
+          id: createLocalId(file.name),
+          name: file.name,
+          size: file.size,
+          url: URL.createObjectURL(file),
+        })),
+      ]);
+    } catch (uploadError) {
+      setImageMergeError(uploadError instanceof Error ? uploadError.message : "Failed to load the selected screenshots.");
+    }
   }
 
   function removeImageMergeItem(itemId: string) {
@@ -656,8 +673,13 @@ export default function InvestmentsPage() {
 
     try {
       const images = await Promise.all(imageMergeItems.map((item) => loadMergeImage(item.url)));
-      const outputWidth = Math.max(...images.map((image) => image.naturalWidth));
-      const heights = images.map((image) => Math.round((image.naturalHeight * outputWidth) / image.naturalWidth));
+      const widestImage = Math.max(...images.map((image) => image.naturalWidth));
+      const fullSizeHeight = images
+        .map((image) => Math.round((image.naturalHeight * widestImage) / image.naturalWidth))
+        .reduce((total, height) => total + height, 0);
+      const widthScale = Math.min(1, MAX_MERGED_IMAGE_WIDTH / widestImage, MAX_MERGED_IMAGE_HEIGHT / fullSizeHeight);
+      const outputWidth = Math.max(1, Math.round(widestImage * widthScale));
+      const heights = images.map((image) => Math.max(1, Math.round((image.naturalHeight * outputWidth) / image.naturalWidth)));
       const outputHeight = heights.reduce((total, height) => total + height, 0);
       const canvas = document.createElement("canvas");
       const context = canvas.getContext("2d");
@@ -1260,7 +1282,7 @@ export default function InvestmentsPage() {
             <input
               ref={imageMergeInputRef}
               type="file"
-              accept="image/*"
+              accept="image/*,.png,.jpg,.jpeg,.webp,.gif,.bmp,.avif"
               multiple
               onChange={(event) => {
                 if (event.target.files) {
