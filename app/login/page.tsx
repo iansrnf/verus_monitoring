@@ -9,6 +9,20 @@ function getAppPath(path: string) {
   return `${APP_BASE_PATH}${path}`;
 }
 
+function normalizeNextPath(next: string | null) {
+  if (!next || next.startsWith("//")) {
+    return getAppPath("/");
+  }
+
+  const appRelativePath = next.startsWith(APP_BASE_PATH) ? next.slice(APP_BASE_PATH.length) || "/" : next.startsWith("/") ? next : "/";
+
+  if (appRelativePath === "/login" || appRelativePath.startsWith("/login?")) {
+    return getAppPath("/");
+  }
+
+  return getAppPath(appRelativePath);
+}
+
 export default function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -19,9 +33,7 @@ export default function LoginPage() {
       return getAppPath("/");
     }
 
-    const next = new URLSearchParams(window.location.search).get("next");
-
-    return next?.startsWith(APP_BASE_PATH) ? next : getAppPath("/");
+    return normalizeNextPath(new URLSearchParams(window.location.search).get("next"));
   }, []);
 
   async function login(event: FormEvent<HTMLFormElement>) {

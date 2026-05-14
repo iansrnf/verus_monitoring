@@ -779,7 +779,7 @@ tr:last-child td {
   text-align: center;
 }
 
-.screenshotStage {
+  .screenshotStage {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1743,9 +1743,23 @@ tr:last-child td {
     justify-content: space-between;
   }
 
-  .screenshotStage {
+.screenshotStage {
     padding: 16px;
   }
+}
+
+.authLoadingPage {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+}
+
+.authLoadingPanel {
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px 18px;
+  background: var(--panel);
 }
 
 @media (max-width: 460px) {

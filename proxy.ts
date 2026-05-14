@@ -50,7 +50,7 @@ export async function proxy(request: NextRequest) {
   }
 
   const loginUrl = new URL(`${APP_BASE_PATH}/login`, request.url);
-  loginUrl.searchParams.set("next", pathname);
+  loginUrl.searchParams.set("next", getAppPath(pathname));
 
   return NextResponse.redirect(loginUrl);
 }

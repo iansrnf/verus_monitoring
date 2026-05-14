@@ -9,6 +9,16 @@ type LoginRequest = {
   password?: unknown;
 };
 
+function isSecureRequest(request: Request) {
+  const forwardedProto = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
+
+  if (forwardedProto) {
+    return forwardedProto === "https";
+  }
+
+  return new URL(request.url).protocol === "https:";
+}
+
 export async function POST(request: Request) {
   const body = (await request.json()) as LoginRequest;
   const expectedUsername = getAdminUsername();
@@ -29,7 +39,7 @@ export async function POST(request: Request) {
     value: sessionToken,
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: isSecureRequest(request),
     path: "/",
     maxAge: adminSessionMaxAge,
   });
