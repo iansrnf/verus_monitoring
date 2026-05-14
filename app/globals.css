@@ -1055,7 +1055,7 @@ tr:last-child td {
 .investmentListWrap {
   display: grid;
   min-height: 0;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto minmax(0, 1fr);
 }
 
 .investmentListHeader {
@@ -1113,6 +1113,64 @@ tr:last-child td {
 .investmentListTabs strong {
   color: var(--accent);
   font-size: 13px;
+}
+
+.investmentListTools {
+  display: grid;
+  gap: 8px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+  padding: 10px;
+}
+
+.investmentSearch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  border: 1px solid var(--line);
+  background: var(--panel-strong);
+  border-radius: 8px;
+  padding: 0 10px;
+}
+
+.investmentSearch input {
+  width: 100%;
+  min-width: 0;
+  min-height: 38px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+}
+
+.investmentSort {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.investmentSort button {
+  min-width: 0;
+  min-height: 34px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  border-radius: 6px;
+  padding: 0 8px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.investmentSort button:hover,
+.investmentSort button:focus-visible,
+.investmentSort button.active {
+  background: var(--panel-strong);
+  color: var(--text);
 }
 
 .investmentItem {

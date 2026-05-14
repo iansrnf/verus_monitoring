@@ -12,6 +12,7 @@ import {
   Plus,
   ReceiptText,
   RefreshCw,
+  Search,
   Trash2,
   TrendingDown,
   TrendingUp,
@@ -41,6 +42,8 @@ type Investment = {
 type ImportMode = "native" | "legacy";
 type InvestmentMobileView = "detail" | "list" | "add";
 type InvestmentListTab = "expenditures" | "roi";
+type InvestmentSortKey = "name" | "cost" | "created_at";
+type SortDirection = "asc" | "desc";
 
 const APP_BASE_PATH = "/verus-monitoring";
 const USD_TO_PHP = 61.458;
@@ -121,6 +124,9 @@ export default function InvestmentsPage() {
   const [showInvestmentForm, setShowInvestmentForm] = useState(false);
   const [mobileView, setMobileView] = useState<InvestmentMobileView>("detail");
   const [investmentListTab, setInvestmentListTab] = useState<InvestmentListTab>("expenditures");
+  const [investmentQuery, setInvestmentQuery] = useState("");
+  const [investmentSortKey, setInvestmentSortKey] = useState<InvestmentSortKey>("created_at");
+  const [investmentSortDirection, setInvestmentSortDirection] = useState<SortDirection>("desc");
   const [editingInvestmentId, setEditingInvestmentId] = useState<number | null>(null);
   const [editingIncomeId, setEditingIncomeId] = useState<number | null>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
@@ -176,7 +182,50 @@ export default function InvestmentsPage() {
     return { expenditures, roi };
   }, [investments]);
 
-  const visibleInvestments = investmentGroups[investmentListTab];
+  const visibleInvestments = useMemo(() => {
+    const query = investmentQuery.trim().toLowerCase();
+    const searchedInvestments = query
+      ? investmentGroups[investmentListTab].filter((investment) =>
+          [
+            getInvestmentName(investment),
+            investment.description,
+            investment.cost,
+            investment.total_income,
+            getProfit(investment),
+            investment.created_at ? formatDate(investment.created_at) : null,
+          ]
+            .filter(Boolean)
+            .some((value) => String(value).toLowerCase().includes(query)),
+        )
+      : investmentGroups[investmentListTab];
+
+    return [...searchedInvestments].sort((firstInvestment, secondInvestment) => {
+      let comparison = 0;
+
+      if (investmentSortKey === "name") {
+        comparison = getInvestmentName(firstInvestment).localeCompare(getInvestmentName(secondInvestment), undefined, {
+          numeric: true,
+          sensitivity: "base",
+        });
+      } else if (investmentSortKey === "cost") {
+        comparison = firstInvestment.cost - secondInvestment.cost;
+      } else {
+        comparison = new Date(firstInvestment.created_at ?? 0).getTime() - new Date(secondInvestment.created_at ?? 0).getTime();
+      }
+
+      return investmentSortDirection === "asc" ? comparison : -comparison;
+    });
+  }, [investmentGroups, investmentListTab, investmentQuery, investmentSortDirection, investmentSortKey]);
+
+  function toggleInvestmentSort(key: InvestmentSortKey) {
+    if (investmentSortKey === key) {
+      setInvestmentSortDirection((currentDirection) => (currentDirection === "asc" ? "desc" : "asc"));
+      return;
+    }
+
+    setInvestmentSortKey(key);
+    setInvestmentSortDirection(key === "name" ? "asc" : "desc");
+  }
 
   async function createInvestment(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -589,6 +638,40 @@ export default function InvestmentsPage() {
                   <strong>{investmentGroups.roi.length}</strong>
                 </button>
               </div>
+              <div className="investmentListTools">
+                <label className="investmentSearch">
+                  <Search size={16} aria-hidden="true" />
+                  <input
+                    value={investmentQuery}
+                    onChange={(event) => setInvestmentQuery(event.target.value)}
+                    placeholder="Search investments"
+                    aria-label="Search investments"
+                  />
+                </label>
+                <div className="investmentSort" aria-label="Sort investments">
+                  <button
+                    type="button"
+                    className={investmentSortKey === "name" ? "active" : ""}
+                    onClick={() => toggleInvestmentSort("name")}
+                  >
+                    Name {investmentSortKey === "name" ? investmentSortDirection.toUpperCase() : ""}
+                  </button>
+                  <button
+                    type="button"
+                    className={investmentSortKey === "cost" ? "active" : ""}
+                    onClick={() => toggleInvestmentSort("cost")}
+                  >
+                    Cost {investmentSortKey === "cost" ? investmentSortDirection.toUpperCase() : ""}
+                  </button>
+                  <button
+                    type="button"
+                    className={investmentSortKey === "created_at" ? "active" : ""}
+                    onClick={() => toggleInvestmentSort("created_at")}
+                  >
+                    Date {investmentSortKey === "created_at" ? investmentSortDirection.toUpperCase() : ""}
+                  </button>
+                </div>
+              </div>
               <div className="investmentList">
                 {loading ? (
                   <div className="empty">Loading investments...</div>
@@ -596,7 +679,11 @@ export default function InvestmentsPage() {
                   <div className="empty">No investments yet.</div>
                 ) : visibleInvestments.length === 0 ? (
                   <div className="empty">
-                    {investmentListTab === "expenditures" ? "No negative-balance expenditures." : "No ROI investments yet."}
+                    {investmentQuery.trim()
+                      ? "No investments match your search."
+                      : investmentListTab === "expenditures"
+                        ? "No negative-balance expenditures."
+                        : "No ROI investments yet."}
                   </div>
                 ) : (
                   visibleInvestments.map((investment) => {
