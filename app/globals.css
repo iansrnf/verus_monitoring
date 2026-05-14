@@ -927,20 +927,29 @@ tr:last-child td {
   stroke-linejoin: round;
 }
 
-.chartLine.income,
+.chartLine.income {
+  stroke: var(--online);
+}
+
 .chartDot.income,
 .chartBar.income,
 .chartLegend i.income {
-  stroke: var(--online);
   fill: var(--online);
 }
 
-.chartLine.expenditure,
+.chartLine.expenditure {
+  stroke: var(--offline);
+}
+
 .chartDot.expenditure,
 .chartBar.expenditure,
 .chartLegend i.expenditure {
-  stroke: var(--offline);
   fill: var(--offline);
+}
+
+.chartLine.income,
+.chartLine.expenditure {
+  fill: none;
 }
 
 .chartBar {
@@ -948,6 +957,7 @@ tr:last-child td {
 }
 
 .chartDot {
+  stroke: var(--panel);
   stroke-width: 2;
 }
 
