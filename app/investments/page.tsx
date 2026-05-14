@@ -37,6 +37,7 @@ type Investment = {
 
 type ImportMode = "native" | "legacy";
 type InvestmentMobileView = "detail" | "list" | "add";
+type InvestmentListTab = "expenditures" | "roi";
 
 const APP_BASE_PATH = "/verus-monitoring";
 const USD_TO_PHP = 61.458;
@@ -109,6 +110,7 @@ export default function InvestmentsPage() {
   const [importMode, setImportMode] = useState<ImportMode>("native");
   const [showInvestmentForm, setShowInvestmentForm] = useState(false);
   const [mobileView, setMobileView] = useState<InvestmentMobileView>("detail");
+  const [investmentListTab, setInvestmentListTab] = useState<InvestmentListTab>("expenditures");
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const importModeRef = useRef<ImportMode>("native");
 
@@ -154,6 +156,15 @@ export default function InvestmentsPage() {
       profit: income - cost,
     };
   }, [investments]);
+
+  const investmentGroups = useMemo(() => {
+    const expenditures = investments.filter((investment) => getProfit(investment) < 0);
+    const roi = investments.filter((investment) => getProfit(investment) >= 0);
+
+    return { expenditures, roi };
+  }, [investments]);
+
+  const visibleInvestments = investmentGroups[investmentListTab];
 
   async function createInvestment(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -454,16 +465,44 @@ export default function InvestmentsPage() {
 
             <div className={`investmentListWrap ${mobileView === "list" ? "mobileActive" : ""}`}>
               <div className="investmentListHeader">
-                <span>Expenditures</span>
-                <strong>{investments.length}</strong>
+                <span>{investmentListTab === "expenditures" ? "Expenditures" : "ROI"}</span>
+                <strong>{visibleInvestments.length}</strong>
+              </div>
+              <div className="investmentListTabs" role="tablist" aria-label="Investment balance groups">
+                <button
+                  type="button"
+                  className={investmentListTab === "expenditures" ? "active" : ""}
+                  onClick={() => setInvestmentListTab("expenditures")}
+                  role="tab"
+                  aria-selected={investmentListTab === "expenditures"}
+                >
+                  <TrendingDown size={15} />
+                  <span>Expenditures</span>
+                  <strong>{investmentGroups.expenditures.length}</strong>
+                </button>
+                <button
+                  type="button"
+                  className={investmentListTab === "roi" ? "active" : ""}
+                  onClick={() => setInvestmentListTab("roi")}
+                  role="tab"
+                  aria-selected={investmentListTab === "roi"}
+                >
+                  <TrendingUp size={15} />
+                  <span>ROI</span>
+                  <strong>{investmentGroups.roi.length}</strong>
+                </button>
               </div>
               <div className="investmentList">
                 {loading ? (
                   <div className="empty">Loading investments...</div>
                 ) : investments.length === 0 ? (
                   <div className="empty">No investments yet.</div>
+                ) : visibleInvestments.length === 0 ? (
+                  <div className="empty">
+                    {investmentListTab === "expenditures" ? "No negative-balance expenditures." : "No ROI investments yet."}
+                  </div>
                 ) : (
-                  investments.map((investment) => {
+                  visibleInvestments.map((investment) => {
                     const profit = getProfit(investment);
 
                     return (
