@@ -9,7 +9,11 @@ import {
   Check,
   Download,
   FileUp,
+  FolderOpen,
+  Images,
   LineChart,
+  MoveDown,
+  MoveUp,
   Pencil,
   Plus,
   ReceiptText,
@@ -48,6 +52,13 @@ type InvestmentListTab = "expenditures" | "roi";
 type InvestmentSortKey = "name" | "cost" | "created_at";
 type SortDirection = "asc" | "desc";
 type InvestmentChartMode = "line" | "bar";
+
+type ImageMergeItem = {
+  id: string;
+  name: string;
+  size: number;
+  url: string;
+};
 
 type ChartPoint = {
   id: string;
@@ -143,7 +154,13 @@ export default function InvestmentsPage() {
   const [showChart, setShowChart] = useState(false);
   const [editingInvestmentId, setEditingInvestmentId] = useState<number | null>(null);
   const [editingIncomeId, setEditingIncomeId] = useState<number | null>(null);
+  const [imageMergerOpen, setImageMergerOpen] = useState(false);
+  const [imageMergeItems, setImageMergeItems] = useState<ImageMergeItem[]>([]);
+  const [imageMergeError, setImageMergeError] = useState<string | null>(null);
+  const [mergingImages, setMergingImages] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
+  const imageMergeInputRef = useRef<HTMLInputElement | null>(null);
+  const imageMergeItemsRef = useRef<ImageMergeItem[]>([]);
   const importModeRef = useRef<ImportMode>("native");
 
   const loadInvestments = useCallback(async (showLoading = true) => {
@@ -172,6 +189,16 @@ export default function InvestmentsPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadInvestments();
   }, [loadInvestments]);
+
+  useEffect(() => {
+    imageMergeItemsRef.current = imageMergeItems;
+  }, [imageMergeItems]);
+
+  useEffect(() => {
+    return () => {
+      imageMergeItemsRef.current.forEach((item) => URL.revokeObjectURL(item.url));
+    };
+  }, []);
 
   const selectedInvestment = useMemo(
     () => investments.find((investment) => investment.id === selectedInvestmentId) ?? investments[0] ?? null,
@@ -556,7 +583,120 @@ export default function InvestmentsPage() {
     URL.revokeObjectURL(url);
   }
 
+  function addImageMergeFiles(files: FileList | File[]) {
+    const imageFiles = Array.from(files).filter((file) => file.type.startsWith("image/"));
+
+    if (imageFiles.length === 0) {
+      setImageMergeError("Drop or select PNG/JPG/WebP screenshot files.");
+      return;
+    }
+
+    setImageMergeError(null);
+    setImageMergeItems((currentItems) => [
+      ...currentItems,
+      ...imageFiles.map((file) => ({
+        id: `${file.name}-${file.lastModified}-${crypto.randomUUID()}`,
+        name: file.name,
+        size: file.size,
+        url: URL.createObjectURL(file),
+      })),
+    ]);
+  }
+
+  function removeImageMergeItem(itemId: string) {
+    setImageMergeItems((currentItems) => {
+      const item = currentItems.find((candidate) => candidate.id === itemId);
+
+      if (item) {
+        URL.revokeObjectURL(item.url);
+      }
+
+      return currentItems.filter((candidate) => candidate.id !== itemId);
+    });
+  }
+
+  function clearImageMergeItems() {
+    imageMergeItemsRef.current.forEach((item) => URL.revokeObjectURL(item.url));
+    setImageMergeItems([]);
+    setImageMergeError(null);
+  }
+
+  function moveImageMergeItem(itemId: string, direction: -1 | 1) {
+    setImageMergeItems((currentItems) => {
+      const index = currentItems.findIndex((item) => item.id === itemId);
+      const nextIndex = index + direction;
+
+      if (index < 0 || nextIndex < 0 || nextIndex >= currentItems.length) {
+        return currentItems;
+      }
+
+      const nextItems = [...currentItems];
+      [nextItems[index], nextItems[nextIndex]] = [nextItems[nextIndex], nextItems[index]];
+      return nextItems;
+    });
+  }
+
+  function loadMergeImage(url: string) {
+    return new Promise<HTMLImageElement>((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = () => reject(new Error("Failed to load one of the screenshots."));
+      image.src = url;
+    });
+  }
+
+  async function exportMergedImage() {
+    if (imageMergeItems.length === 0) {
+      setImageMergeError("Add at least one screenshot first.");
+      return;
+    }
+
+    setMergingImages(true);
+    setImageMergeError(null);
+
+    try {
+      const images = await Promise.all(imageMergeItems.map((item) => loadMergeImage(item.url)));
+      const outputWidth = Math.max(...images.map((image) => image.naturalWidth));
+      const heights = images.map((image) => Math.round((image.naturalHeight * outputWidth) / image.naturalWidth));
+      const outputHeight = heights.reduce((total, height) => total + height, 0);
+      const canvas = document.createElement("canvas");
+      const context = canvas.getContext("2d");
+
+      if (!context) {
+        throw new Error("Canvas is not available in this browser.");
+      }
+
+      canvas.width = outputWidth;
+      canvas.height = outputHeight;
+
+      let offsetY = 0;
+      images.forEach((image, index) => {
+        context.drawImage(image, 0, offsetY, outputWidth, heights[index]);
+        offsetY += heights[index];
+      });
+
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+
+      if (!blob) {
+        throw new Error("Failed to create the merged PNG.");
+      }
+
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+
+      link.href = url;
+      link.download = `merged-screenshots-${new Date().toISOString().slice(0, 10)}.png`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (mergeError) {
+      setImageMergeError(mergeError instanceof Error ? mergeError.message : "Failed to merge screenshots.");
+    } finally {
+      setMergingImages(false);
+    }
+  }
+
   return (
+    <>
     <main className="page investmentPage">
       <div className="shell">
         <header className="topbar">
@@ -605,6 +745,10 @@ export default function InvestmentsPage() {
           <button type="button" className="loadConfig" onClick={exportInvestments} disabled={investments.length === 0}>
             <Download size={17} />
             Export JSON
+          </button>
+          <button type="button" className="loadConfig" onClick={() => setImageMergerOpen(true)}>
+            <Images size={17} />
+            Extra Tools
           </button>
         </div>
 
@@ -1097,5 +1241,97 @@ export default function InvestmentsPage() {
         </section>
       </div>
     </main>
+
+    {imageMergerOpen ? (
+      <div className="toolModal" role="dialog" aria-modal="true" aria-label="Image merger">
+        <button className="toolModalBackdrop" type="button" aria-label="Close image merger" onClick={() => setImageMergerOpen(false)} />
+        <div className="toolDialog imageMergerDialog">
+          <div className="toolModalBar">
+            <div>
+              <span>Extra Tools</span>
+              <strong>Image Merger</strong>
+            </div>
+            <button type="button" aria-label="Close image merger" onClick={() => setImageMergerOpen(false)}>
+              <X size={18} />
+            </button>
+          </div>
+
+          <div className="imageMergerBody">
+            <input
+              ref={imageMergeInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={(event) => {
+                if (event.target.files) {
+                  addImageMergeFiles(event.target.files);
+                }
+                event.target.value = "";
+              }}
+            />
+            <button
+              type="button"
+              className="imageDropzone"
+              onClick={() => imageMergeInputRef.current?.click()}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={(event) => {
+                event.preventDefault();
+                addImageMergeFiles(event.dataTransfer.files);
+              }}
+            >
+              <FolderOpen size={28} />
+              <strong>Drop screenshots here</strong>
+              <span>or click to choose images from Windows Explorer</span>
+            </button>
+
+            {imageMergeError ? <div className="notice">{imageMergeError}</div> : null}
+
+            <div className="imageMergeList">
+              {imageMergeItems.length === 0 ? (
+                <div className="imageMergeEmpty">No screenshots selected.</div>
+              ) : (
+                imageMergeItems.map((item, index) => (
+                  <div className="imageMergeItem" key={item.id}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={item.url} alt="" />
+                    <div>
+                      <strong>{item.name}</strong>
+                      <span>{Math.max(1, Math.round(item.size / 1024))} KB</span>
+                    </div>
+                    <div className="imageMergeItemActions">
+                      <button type="button" onClick={() => moveImageMergeItem(item.id, -1)} disabled={index === 0} aria-label="Move image up">
+                        <MoveUp size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moveImageMergeItem(item.id, 1)}
+                        disabled={index === imageMergeItems.length - 1}
+                        aria-label="Move image down"
+                      >
+                        <MoveDown size={16} />
+                      </button>
+                      <button type="button" className="dangerIcon" onClick={() => removeImageMergeItem(item.id)} aria-label="Remove image">
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="toolModalFooter">
+            <button type="button" className="secondaryButton" onClick={clearImageMergeItems} disabled={imageMergeItems.length === 0 || mergingImages}>
+              Clear
+            </button>
+            <button type="button" className="loadConfig" onClick={() => void exportMergedImage()} disabled={imageMergeItems.length === 0 || mergingImages}>
+              <Download size={17} />
+              {mergingImages ? "Merging..." : "Export PNG"}
+            </button>
+          </div>
+        </div>
+      </div>
+    ) : null}
+    </>
   );
 }

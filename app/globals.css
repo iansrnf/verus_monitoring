@@ -895,6 +895,188 @@ tr:last-child td {
   display: none;
 }
 
+.toolModal {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.toolModalBackdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(0, 0, 0, 0.72);
+  cursor: zoom-out;
+}
+
+.toolDialog {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: min(760px, 100%);
+  max-height: min(820px, calc(100vh - 40px));
+  border: 1px solid var(--line);
+  background: #0d0f12;
+  border-radius: 8px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+
+.toolModalBar,
+.toolModalFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--panel);
+  padding: 12px 14px;
+}
+
+.toolModalBar {
+  border-bottom: 1px solid var(--line);
+}
+
+.toolModalFooter {
+  border-top: 1px solid var(--line);
+}
+
+.toolModalBar span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.toolModalBar strong {
+  display: block;
+  margin-top: 3px;
+  font-size: 18px;
+}
+
+.toolModalBar > button,
+.imageMergeItemActions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--line);
+  background: var(--panel-strong);
+  color: var(--text);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.toolModalBar > button:hover,
+.toolModalBar > button:focus-visible,
+.imageMergeItemActions button:hover:not(:disabled),
+.imageMergeItemActions button:focus-visible {
+  border-color: var(--accent);
+}
+
+.imageMergerBody {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 12px;
+  overflow: auto;
+  padding: 14px;
+}
+
+.imageMergerBody > input {
+  display: none;
+}
+
+.imageDropzone {
+  display: flex;
+  min-height: 150px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  border: 1px dashed rgba(125, 211, 252, 0.52);
+  background: rgba(125, 211, 252, 0.08);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 20px;
+  cursor: pointer;
+}
+
+.imageDropzone:hover,
+.imageDropzone:focus-visible {
+  border-color: var(--accent);
+}
+
+.imageDropzone span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.imageMergeList {
+  display: grid;
+  gap: 10px;
+}
+
+.imageMergeEmpty {
+  display: grid;
+  min-height: 96px;
+  place-items: center;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--muted);
+  border-radius: 8px;
+}
+
+.imageMergeItem {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.imageMergeItem img {
+  width: 74px;
+  height: 74px;
+  object-fit: cover;
+  border: 1px solid var(--line);
+  background: #08090a;
+  border-radius: 6px;
+}
+
+.imageMergeItem strong,
+.imageMergeItem span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.imageMergeItem span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.imageMergeItemActions {
+  display: flex;
+  gap: 6px;
+}
+
+.imageMergeItemActions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .investmentMobileTabs {
   display: none;
 }
@@ -1763,6 +1945,33 @@ tr:last-child td {
 }
 
 @media (max-width: 460px) {
+  .toolModal {
+    padding: 10px;
+  }
+
+  .toolDialog {
+    max-height: calc(100vh - 20px);
+  }
+
+  .toolModalFooter {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .imageMergeItem {
+    grid-template-columns: 58px minmax(0, 1fr);
+  }
+
+  .imageMergeItem img {
+    width: 58px;
+    height: 58px;
+  }
+
+  .imageMergeItemActions {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+  }
+
   .summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
