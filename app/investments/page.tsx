@@ -36,6 +36,7 @@ type Investment = {
 };
 
 type ImportMode = "native" | "legacy";
+type InvestmentMobileView = "detail" | "list" | "add";
 
 const APP_BASE_PATH = "/verus-monitoring";
 const USD_TO_PHP = 61.458;
@@ -106,6 +107,8 @@ export default function InvestmentsPage() {
   const [error, setError] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const [importMode, setImportMode] = useState<ImportMode>("native");
+  const [showInvestmentForm, setShowInvestmentForm] = useState(false);
+  const [mobileView, setMobileView] = useState<InvestmentMobileView>("detail");
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const importModeRef = useRef<ImportMode>("native");
 
@@ -176,6 +179,8 @@ export default function InvestmentsPage() {
       setInvestmentDescription("");
       await loadInvestments(false);
       setSelectedInvestmentId(result.investment?.id ?? null);
+      setShowInvestmentForm(false);
+      setMobileView("detail");
     }
 
     setSavingInvestment(false);
@@ -222,6 +227,7 @@ export default function InvestmentsPage() {
     }
 
     setSelectedInvestmentId(null);
+    setMobileView("list");
     await loadInvestments(false);
   }
 
@@ -359,8 +365,43 @@ export default function InvestmentsPage() {
           </button>
         </div>
 
+        <div className="investmentMobileTabs" role="tablist" aria-label="Investment views">
+          <button
+            type="button"
+            className={mobileView === "detail" ? "active" : ""}
+            onClick={() => setMobileView("detail")}
+            role="tab"
+            aria-selected={mobileView === "detail"}
+          >
+            Details
+          </button>
+          <button
+            type="button"
+            className={mobileView === "list" ? "active" : ""}
+            onClick={() => setMobileView("list")}
+            role="tab"
+            aria-selected={mobileView === "list"}
+          >
+            List
+          </button>
+          <button
+            type="button"
+            className={mobileView === "add" ? "active" : ""}
+            onClick={() => setMobileView("add")}
+            role="tab"
+            aria-selected={mobileView === "add"}
+          >
+            Add
+          </button>
+        </div>
+
         <section className="investmentGrid">
-          <aside className="investmentSidebar" aria-label="Investment list">
+          <aside
+            className={`investmentSidebar ${mobileView === "detail" ? "" : "mobileActive"} ${
+              mobileView === "list" ? "showMobileList" : "showMobileAdd"
+            }`}
+            aria-label="Investment list"
+          >
             <div className="investmentPanelHeader">
               <div>
                 <span>Portfolio</span>
@@ -371,63 +412,84 @@ export default function InvestmentsPage() {
               </button>
             </div>
 
-            <form className="investmentForm" onSubmit={createInvestment}>
-              <label>
-                <span>Name</span>
-                <input value={investmentName} onChange={(event) => setInvestmentName(event.target.value)} placeholder="Phone batch, Contabo" />
-              </label>
-              <label>
-                <span>Cost</span>
-                <input
-                  value={investmentCost}
-                  onChange={(event) => setInvestmentCost(event.target.value)}
-                  inputMode="decimal"
-                  placeholder="0.00"
-                />
-              </label>
-              <label>
-                <span>Description</span>
-                <textarea
-                  value={investmentDescription}
-                  onChange={(event) => setInvestmentDescription(event.target.value)}
-                  placeholder="Notes for this expenditure"
-                />
-              </label>
-              <button className="loadConfig" type="submit" disabled={savingInvestment}>
+            <div className={`investmentFormWrap ${showInvestmentForm ? "open" : ""} ${mobileView === "add" ? "forceOpen" : ""}`}>
+              <button
+                className="investmentAddToggle"
+                type="button"
+                onClick={() => setShowInvestmentForm((currentValue) => !currentValue)}
+                aria-expanded={showInvestmentForm || mobileView === "add"}
+              >
                 <Plus size={17} />
-                {savingInvestment ? "Adding..." : "Add Investment"}
+                Add Expenditure
               </button>
-            </form>
 
-            <div className="investmentList">
-              {loading ? (
-                <div className="empty">Loading investments...</div>
-              ) : investments.length === 0 ? (
-                <div className="empty">No investments yet.</div>
-              ) : (
-                investments.map((investment) => {
-                  const profit = getProfit(investment);
+              <form className="investmentForm" onSubmit={createInvestment}>
+                <label>
+                  <span>Name</span>
+                  <input value={investmentName} onChange={(event) => setInvestmentName(event.target.value)} placeholder="Phone batch, Contabo" />
+                </label>
+                <label>
+                  <span>Cost</span>
+                  <input
+                    value={investmentCost}
+                    onChange={(event) => setInvestmentCost(event.target.value)}
+                    inputMode="decimal"
+                    placeholder="0.00"
+                  />
+                </label>
+                <label>
+                  <span>Description</span>
+                  <textarea
+                    value={investmentDescription}
+                    onChange={(event) => setInvestmentDescription(event.target.value)}
+                    placeholder="Notes for this expenditure"
+                  />
+                </label>
+                <button className="loadConfig" type="submit" disabled={savingInvestment}>
+                  <Plus size={17} />
+                  {savingInvestment ? "Adding..." : "Add Investment"}
+                </button>
+              </form>
+            </div>
 
-                  return (
-                    <button
-                      className={`investmentItem ${selectedInvestment?.id === investment.id ? "active" : ""}`}
-                      key={investment.id}
-                      type="button"
-                      onClick={() => setSelectedInvestmentId(investment.id)}
-                    >
-                      <span>
-                        <strong>{getInvestmentName(investment)}</strong>
-                        <small>{investment.income_count} income records</small>
-                      </span>
-                      <b className={profit >= 0 ? "positiveText" : "negativeText"}>{formatUsd(profit)}</b>
-                    </button>
-                  );
-                })
-              )}
+            <div className={`investmentListWrap ${mobileView === "list" ? "mobileActive" : ""}`}>
+              <div className="investmentListHeader">
+                <span>Expenditures</span>
+                <strong>{investments.length}</strong>
+              </div>
+              <div className="investmentList">
+                {loading ? (
+                  <div className="empty">Loading investments...</div>
+                ) : investments.length === 0 ? (
+                  <div className="empty">No investments yet.</div>
+                ) : (
+                  investments.map((investment) => {
+                    const profit = getProfit(investment);
+
+                    return (
+                      <button
+                        className={`investmentItem ${selectedInvestment?.id === investment.id ? "active" : ""}`}
+                        key={investment.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedInvestmentId(investment.id);
+                          setMobileView("detail");
+                        }}
+                      >
+                        <span>
+                          <strong>{getInvestmentName(investment)}</strong>
+                          <small>{investment.income_count} income records</small>
+                        </span>
+                        <b className={profit >= 0 ? "positiveText" : "negativeText"}>{formatUsd(profit)}</b>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
             </div>
           </aside>
 
-          <section className="investmentDetail" aria-label="Investment detail">
+          <section className={`investmentDetail ${mobileView === "detail" ? "mobileActive" : ""}`} aria-label="Investment detail">
             {selectedInvestment ? (
               <>
                 <div className="detailHeader">
