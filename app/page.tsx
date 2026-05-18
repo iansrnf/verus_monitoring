@@ -15,6 +15,7 @@ import {
   RefreshCw,
   Save,
   Search,
+  ShieldCheck,
   Smartphone,
   WalletCards,
   Wifi,
@@ -390,6 +391,18 @@ function getDeviceGroups(devices: DeviceWithComputedStatus[]) {
     });
 }
 
+function getGroupHeaderClassName(group: DeviceGroup) {
+  if (group.onlineCount === 0) {
+    return "groupHeader allOffline";
+  }
+
+  if (group.onlineCount === group.devices.length) {
+    return "groupHeader allOnline";
+  }
+
+  return "groupHeader hasOffline";
+}
+
 export default function Home() {
   const [devices, setDevices] = useState<Device[]>([]);
   const [query, setQuery] = useState("");
@@ -665,6 +678,10 @@ export default function Home() {
               <WalletCards size={16} />
               Investment Dashboard
             </Link>
+            <Link className="dashboardLink" href="/fail2ban">
+              <ShieldCheck size={16} />
+              Fail2Ban Monitor
+            </Link>
             <LogoutButton />
           </div>
 
@@ -851,7 +868,7 @@ export default function Home() {
                   filteredDeviceGroups.map((group) => (
                     <article className="groupSection" key={group.key}>
                       <button
-                        className={`groupHeader ${group.onlineCount === 0 ? "allOffline" : ""}`}
+                        className={getGroupHeaderClassName(group)}
                         type="button"
                         onClick={() => toggleGroup(group.key)}
                         aria-expanded={expandedGroups.has(group.key)}

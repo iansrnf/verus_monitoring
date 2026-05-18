@@ -303,6 +303,160 @@ select {
   font-size: 14px;
 }
 
+.fail2banToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 14px;
+}
+
+.fail2banToolbar span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.fail2banGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+  margin-bottom: 22px;
+}
+
+.fail2banJail {
+  min-width: 0;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.fail2banJail.hasBans {
+  border-color: rgba(255, 107, 107, 0.46);
+  background: rgba(255, 107, 107, 0.08);
+}
+
+.fail2banJailHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.fail2banJailHeader span,
+.fail2banAction {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.fail2banJailHeader span svg {
+  flex: 0 0 auto;
+  color: var(--accent);
+}
+
+.fail2banJail.hasBans .fail2banJailHeader span svg,
+.fail2banAction.ban {
+  color: var(--offline);
+}
+
+.fail2banAction.unban {
+  color: var(--online);
+}
+
+.fail2banJailHeader strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fail2banStats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.fail2banStats div {
+  min-width: 0;
+  border: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.12);
+  border-radius: 8px;
+  padding: 9px 10px;
+}
+
+.fail2banStats dt {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.fail2banStats dd {
+  margin: 5px 0 0;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.fail2banIpList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 31px;
+}
+
+.fail2banIpList span {
+  border: 1px solid rgba(255, 107, 107, 0.36);
+  background: rgba(255, 107, 107, 0.12);
+  color: #ffd8d8;
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-family: monospace;
+  font-size: 12px;
+}
+
+.fail2banIpList small {
+  color: var(--muted);
+}
+
+.fail2banHistory {
+  margin-top: 8px;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.sectionHeader h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.sectionHeader p {
+  margin: 5px 0 0;
+  color: var(--muted);
+}
+
+.emptyCell {
+  padding: 38px 18px;
+  color: var(--muted);
+  text-align: center;
+}
+
 .search {
   display: flex;
   align-items: center;
@@ -559,6 +713,28 @@ tr:last-child td {
   background: #252a31;
 }
 
+.groupHeader.allOnline {
+  border-bottom-color: rgba(54, 211, 153, 0.5);
+  background: rgba(54, 211, 153, 0.18);
+  color: #eafff6;
+}
+
+.groupHeader.allOnline:hover,
+.groupHeader.allOnline:focus-visible {
+  background: rgba(54, 211, 153, 0.26);
+}
+
+.groupHeader.hasOffline {
+  border-bottom-color: rgba(125, 211, 252, 0.5);
+  background: rgba(125, 211, 252, 0.17);
+  color: #eefaff;
+}
+
+.groupHeader.hasOffline:hover,
+.groupHeader.hasOffline:focus-visible {
+  background: rgba(125, 211, 252, 0.25);
+}
+
 .groupHeader.allOffline {
   border-bottom-color: rgba(255, 107, 107, 0.45);
   background: rgba(255, 107, 107, 0.16);
@@ -572,13 +748,39 @@ tr:last-child td {
 
 .groupHeader.allOffline .groupTitle svg,
 .groupHeader.allOffline .groupStats small,
-.groupHeader.allOffline .groupStats strong {
+.groupHeader.allOffline .groupStats strong,
+.groupHeader.allOnline .groupTitle svg,
+.groupHeader.allOnline .groupStats small,
+.groupHeader.allOnline .groupStats strong,
+.groupHeader.hasOffline .groupTitle svg,
+.groupHeader.hasOffline .groupStats small,
+.groupHeader.hasOffline .groupStats strong {
+  color: currentColor;
+}
+
+.groupHeader.allOffline h2,
+.groupHeader.allOnline h2,
+.groupHeader.hasOffline h2 {
+  color: currentColor;
+}
+
+.groupHeader.allOffline .groupStats small {
   color: #ffd8d8;
 }
 
 .groupHeader.allOffline .groupStats span {
   border-color: rgba(255, 107, 107, 0.35);
   background: rgba(255, 107, 107, 0.1);
+}
+
+.groupHeader.allOnline .groupStats span {
+  border-color: rgba(54, 211, 153, 0.38);
+  background: rgba(54, 211, 153, 0.11);
+}
+
+.groupHeader.hasOffline .groupStats span {
+  border-color: rgba(125, 211, 252, 0.38);
+  background: rgba(125, 211, 252, 0.11);
 }
 
 .groupTitle {
