@@ -72,6 +72,7 @@ type DeviceGroup = {
   label: string;
   devices: DeviceWithComputedStatus[];
   onlineCount: number;
+  latestSeenAt: number | null;
 };
 
 const STALE_DEVICE_MS = 60_000;
@@ -358,10 +359,35 @@ function getDeviceGroups(devices: DeviceWithComputedStatus[]) {
         label: `${groupBase}*`,
         devices: sortedDevices,
         onlineCount: sortedDevices.filter((device) => device.computedOnline).length,
+        latestSeenAt: sortedDevices.reduce<number | null>((latestSeenAt, device) => {
+          if (device.lastSeenAt === null) {
+            return latestSeenAt;
+          }
+
+          return latestSeenAt === null ? device.lastSeenAt : Math.max(latestSeenAt, device.lastSeenAt);
+        }, null),
       };
     })
     .filter((group) => group.devices.length > 1)
-    .sort((firstGroup, secondGroup) => compareText(firstGroup.label, secondGroup.label));
+    .sort((firstGroup, secondGroup) => {
+      const firstOnlineRatio = firstGroup.onlineCount / firstGroup.devices.length;
+      const secondOnlineRatio = secondGroup.onlineCount / secondGroup.devices.length;
+      const onlineRatioComparison = secondOnlineRatio - firstOnlineRatio;
+
+      if (onlineRatioComparison) {
+        return onlineRatioComparison;
+      }
+
+      const onlineCountComparison = secondGroup.onlineCount - firstGroup.onlineCount;
+
+      if (onlineCountComparison) {
+        return onlineCountComparison;
+      }
+
+      const createdComparison = (secondGroup.latestSeenAt ?? 0) - (firstGroup.latestSeenAt ?? 0);
+
+      return createdComparison || compareText(firstGroup.label, secondGroup.label);
+    });
 }
 
 export default function Home() {
@@ -825,7 +851,7 @@ export default function Home() {
                   filteredDeviceGroups.map((group) => (
                     <article className="groupSection" key={group.key}>
                       <button
-                        className="groupHeader"
+                        className={`groupHeader ${group.onlineCount === 0 ? "allOffline" : ""}`}
                         type="button"
                         onClick={() => toggleGroup(group.key)}
                         aria-expanded={expandedGroups.has(group.key)}

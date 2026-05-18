@@ -559,6 +559,28 @@ tr:last-child td {
   background: #252a31;
 }
 
+.groupHeader.allOffline {
+  border-bottom-color: rgba(255, 107, 107, 0.45);
+  background: rgba(255, 107, 107, 0.16);
+  color: #ffd8d8;
+}
+
+.groupHeader.allOffline:hover,
+.groupHeader.allOffline:focus-visible {
+  background: rgba(255, 107, 107, 0.24);
+}
+
+.groupHeader.allOffline .groupTitle svg,
+.groupHeader.allOffline .groupStats small,
+.groupHeader.allOffline .groupStats strong {
+  color: #ffd8d8;
+}
+
+.groupHeader.allOffline .groupStats span {
+  border-color: rgba(255, 107, 107, 0.35);
+  background: rgba(255, 107, 107, 0.1);
+}
+
 .groupTitle {
   display: flex;
   align-items: center;
