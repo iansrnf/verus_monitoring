@@ -222,8 +222,14 @@ function getDeviceIncomeKey(value: string) {
     .replace(/\d+$/g, "");
 }
 
-function getDeviceRowAmount(row: string) {
-  const candidates = [...row.matchAll(/(?:[$S]\s*)?((?:[0oO])?[.,]\d{2,6})\b/g)]
+function isDeviceNameCandidate(value: string) {
+  const key = getDeviceIncomeKey(value);
+
+  return key.length >= 3 && /[a-z]{3}/i.test(key);
+}
+
+function getDeviceAmounts(value: string) {
+  return [...value.matchAll(/(?:[$S]\s*)?((?:[0oO])?[.,]\d{2,6})\b/g)]
     .map((match) => {
       const normalizedAmount = match[1].replace(/[oO]/g, "0").replace(",", ".");
       const amountText = normalizedAmount.startsWith(".") ? `0${normalizedAmount}` : normalizedAmount;
@@ -231,22 +237,26 @@ function getDeviceRowAmount(row: string) {
       return Number(amountText);
     })
     .filter((amount) => Number.isFinite(amount) && amount > 0 && amount < MAX_DEVICE_ROW_AMOUNT);
+}
+
+function getDeviceRowAmount(row: string) {
+  const candidates = getDeviceAmounts(row);
 
   return candidates.at(-1) ?? null;
 }
 
 function parseDeviceIncomeText(text: string, investments: Investment[]) {
   const investmentByKey = new Map(investments.map((investment) => [getDeviceIncomeKey(getInvestmentName(investment)), investment]));
-  const groups = new Map<string, { deviceNames: Set<string>; amount: number }>();
   const rows = text
     .split(/\r?\n/)
     .map((line) => line.replace(/[|•]/g, " ").replace(/\s+/g, " ").trim())
     .filter(Boolean);
+  const rowRecords: { deviceName: string; amount: number }[] = [];
 
   for (const row of rows) {
     const deviceName = row.match(/\b([a-z][a-z0-9_-]*\d+)\b/i)?.[1];
 
-    if (!deviceName) {
+    if (!deviceName || !isDeviceNameCandidate(deviceName)) {
       continue;
     }
 
@@ -256,10 +266,35 @@ function parseDeviceIncomeText(text: string, investments: Investment[]) {
       continue;
     }
 
+    rowRecords.push({ deviceName: deviceName.toLowerCase(), amount });
+  }
+
+  const sequentialDeviceNames = rows
+    .flatMap((row) => [...row.matchAll(/\b([a-z][a-z0-9_-]*\d+)\b/gi)].map((match) => match[1]))
+    .filter(isDeviceNameCandidate)
+    .map((deviceName) => deviceName.toLowerCase());
+  const sequentialAmounts = rows.flatMap(getDeviceAmounts);
+  const sequentialRecords = sequentialDeviceNames.slice(0, sequentialAmounts.length).map((deviceName, index) => ({
+    deviceName,
+    amount: sequentialAmounts[index],
+  }));
+  const records = sequentialRecords.length > rowRecords.length ? sequentialRecords : rowRecords;
+  const groups = new Map<string, { deviceNames: Set<string>; amount: number }>();
+  const seenDeviceAmounts = new Set<string>();
+
+  for (const { deviceName, amount } of records) {
+    const seenKey = `${deviceName}:${amount}`;
+
+    if (seenDeviceAmounts.has(seenKey)) {
+      continue;
+    }
+
+    seenDeviceAmounts.add(seenKey);
+
     const key = getDeviceIncomeKey(deviceName);
     const group = groups.get(key) ?? { deviceNames: new Set<string>(), amount: 0 };
 
-    group.deviceNames.add(deviceName.toLowerCase());
+    group.deviceNames.add(deviceName);
     group.amount += amount;
     groups.set(key, group);
   }
