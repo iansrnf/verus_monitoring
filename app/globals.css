@@ -340,6 +340,36 @@ select {
   min-width: 980px;
 }
 
+.earnAppPage {
+  height: 100vh;
+  overflow: hidden;
+}
+
+.earnAppPage .shell {
+  display: flex;
+  height: calc(100vh - 56px);
+  flex-direction: column;
+  min-height: 0;
+}
+
+.earnAppPage .toolbar {
+  flex: 0 0 auto;
+}
+
+.earnAppPage .earnAppTable {
+  flex: 1 1 auto;
+  max-height: none;
+  min-height: 240px;
+  overflow: auto;
+}
+
+.earnAppPage .earnAppTable th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--panel);
+}
+
 .currentConfigHeader button {
   display: inline-flex;
   align-items: center;

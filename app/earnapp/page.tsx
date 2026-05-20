@@ -146,7 +146,7 @@ export default function EarnAppDevicesPage() {
   const zeroEarnedCount = devices.filter((device) => device.earned <= 0).length;
 
   return (
-    <main className="page">
+    <main className="page earnAppPage">
       <div className="shell">
         <Link className="backLink" href="/">
           <ArrowLeft size={16} />
