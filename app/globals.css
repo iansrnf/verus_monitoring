@@ -1217,6 +1217,130 @@ tr:last-child td {
   display: none;
 }
 
+.screenshotIncomeTool {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.screenshotIncomeTool > input {
+  display: none;
+}
+
+.screenshotIncomeHeader,
+.screenshotIncomeStatus,
+.screenshotIncomeActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.screenshotIncomeHeader span,
+.screenshotIncomeStatus span,
+.screenshotIncomeItem span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.screenshotIncomeHeader span {
+  display: block;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.screenshotIncomeHeader strong {
+  display: block;
+  margin-top: 4px;
+}
+
+.screenshotIncomeStatus {
+  border: 1px solid var(--line);
+  background: var(--panel-strong);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.screenshotIncomePreview {
+  display: grid;
+  gap: 8px;
+}
+
+.screenshotIncomeItem {
+  display: grid;
+  grid-template-columns: minmax(110px, 0.8fr) minmax(90px, 0.6fr) minmax(140px, 1fr) minmax(160px, 1.2fr) auto;
+  align-items: end;
+  gap: 10px;
+  border: 1px solid var(--line);
+  background: var(--panel-strong);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.screenshotIncomeItem.unmatched {
+  border-color: rgba(248, 113, 113, 0.44);
+}
+
+.screenshotIncomeItem label {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.screenshotIncomeItem input,
+.screenshotIncomeItem select {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line);
+  outline: 0;
+  background: var(--panel);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 9px 10px;
+  font: inherit;
+}
+
+.screenshotIncomeItem input:focus,
+.screenshotIncomeItem select:focus {
+  border-color: var(--accent);
+}
+
+.screenshotIncomeItem span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.screenshotIncomeActions {
+  justify-content: flex-end;
+}
+
+.screenshotIncomeRaw summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.screenshotIncomeRaw textarea {
+  width: 100%;
+  min-height: 120px;
+  margin-top: 8px;
+  resize: vertical;
+  border: 1px solid var(--line);
+  outline: 0;
+  background: var(--panel-strong);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 10px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .aiPromptTool {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

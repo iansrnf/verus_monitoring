@@ -71,6 +71,14 @@ type ImageMergeItem = {
   url: string;
 };
 
+type ScreenshotIncomeGroup = {
+  id: string;
+  key: string;
+  deviceNames: string[];
+  amount: string;
+  investmentId: number | null;
+};
+
 type ChartPoint = {
   id: string;
   kind: "income" | "expenditure";
@@ -148,6 +156,57 @@ function isImageFile(file: File) {
   return file.type.startsWith("image/") || IMAGE_FILE_EXTENSION_PATTERN.test(file.name);
 }
 
+function getDeviceIncomeKey(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "")
+    .replace(/\d+$/g, "");
+}
+
+function parseDeviceIncomeText(text: string, investments: Investment[]) {
+  const investmentByKey = new Map(investments.map((investment) => [getDeviceIncomeKey(getInvestmentName(investment)), investment]));
+  const groups = new Map<string, { deviceNames: Set<string>; amount: number }>();
+  const rows = text
+    .split(/\r?\n/)
+    .map((line) => line.replace(/[|•]/g, " ").replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+
+  for (const row of rows) {
+    const deviceName = row.match(/\b([a-z][a-z0-9_-]*\d+)\b/i)?.[1];
+
+    if (!deviceName) {
+      continue;
+    }
+
+    const dollarAmounts = [...row.matchAll(/\$\s*([0-9]+(?:\.[0-9]+)?)/g)];
+    const plainAmounts = [...row.matchAll(/\b(0\.[0-9]{2,})\b/g)];
+    const amountText = dollarAmounts.at(-1)?.[1] ?? plainAmounts.at(-1)?.[1];
+    const amount = amountText ? Number(amountText) : Number.NaN;
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      continue;
+    }
+
+    const key = getDeviceIncomeKey(deviceName);
+    const group = groups.get(key) ?? { deviceNames: new Set<string>(), amount: 0 };
+
+    group.deviceNames.add(deviceName.toLowerCase());
+    group.amount += amount;
+    groups.set(key, group);
+  }
+
+  return [...groups.entries()]
+    .map(([key, group]) => ({
+      id: createLocalId(key),
+      key,
+      deviceNames: [...group.deviceNames].sort((firstName, secondName) => firstName.localeCompare(secondName, undefined, { numeric: true })),
+      amount: group.amount.toFixed(6).replace(/0+$/g, "").replace(/\.$/g, ""),
+      investmentId: investmentByKey.get(key)?.id ?? null,
+    }))
+    .sort((firstGroup, secondGroup) => firstGroup.key.localeCompare(secondGroup.key));
+}
+
 function formatDate(value: string | null) {
   if (!value) {
     return "-";
@@ -214,7 +273,16 @@ export default function InvestmentsPage() {
   const [imageMergeError, setImageMergeError] = useState<string | null>(null);
   const [mergingImages, setMergingImages] = useState(false);
   const [promptCopied, setPromptCopied] = useState(false);
+  const [screenshotIncomeFileName, setScreenshotIncomeFileName] = useState("");
+  const [screenshotIncomeGroups, setScreenshotIncomeGroups] = useState<ScreenshotIncomeGroup[]>([]);
+  const [screenshotIncomeRawText, setScreenshotIncomeRawText] = useState("");
+  const [screenshotIncomeError, setScreenshotIncomeError] = useState<string | null>(null);
+  const [screenshotIncomeStatus, setScreenshotIncomeStatus] = useState("");
+  const [screenshotIncomeProgress, setScreenshotIncomeProgress] = useState(0);
+  const [scanningIncomeScreenshot, setScanningIncomeScreenshot] = useState(false);
+  const [applyingScreenshotIncome, setApplyingScreenshotIncome] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
+  const screenshotIncomeInputRef = useRef<HTMLInputElement | null>(null);
   const imageMergeInputRef = useRef<HTMLInputElement | null>(null);
   const imageMergeItemsRef = useRef<ImageMergeItem[]>([]);
   const importModeRef = useRef<ImportMode>("native");
@@ -650,6 +718,116 @@ export default function InvestmentsPage() {
     link.download = getExportFileName();
     link.click();
     URL.revokeObjectURL(url);
+  }
+
+  async function scanIncomeScreenshot(file: File) {
+    if (!isImageFile(file)) {
+      setScreenshotIncomeError("Choose a PNG/JPG/WebP screenshot.");
+      return;
+    }
+
+    setScanningIncomeScreenshot(true);
+    setScreenshotIncomeFileName(file.name);
+    setScreenshotIncomeGroups([]);
+    setScreenshotIncomeRawText("");
+    setScreenshotIncomeError(null);
+    setScreenshotIncomeStatus("Loading OCR engine");
+    setScreenshotIncomeProgress(0);
+
+    try {
+      const tesseract = await import("tesseract.js");
+      const result = await tesseract.recognize(file, "eng", {
+        logger: (message) => {
+          setScreenshotIncomeStatus(message.status);
+          setScreenshotIncomeProgress(Number.isFinite(message.progress) ? message.progress : 0);
+        },
+      });
+      const rawText = result.data.text;
+      const groups = parseDeviceIncomeText(rawText, investments);
+
+      setScreenshotIncomeRawText(rawText);
+      setScreenshotIncomeGroups(groups);
+      setScreenshotIncomeStatus("Ready");
+
+      if (groups.length === 0) {
+        setScreenshotIncomeError("I could not find device rows with Amount values. Try a clearer screenshot or crop around the Devices table.");
+      } else if (groups.every((group) => !group.investmentId)) {
+        setScreenshotIncomeError("I found device totals, but none matched an expenditure name. Example: sophiehny1 needs an expenditure named sophiehny.");
+      }
+    } catch (scanError) {
+      setScreenshotIncomeError(scanError instanceof Error ? scanError.message : "Failed to scan the screenshot.");
+      setScreenshotIncomeStatus("");
+    } finally {
+      setScanningIncomeScreenshot(false);
+    }
+  }
+
+  async function applyScreenshotIncome() {
+    const matchedGroups = screenshotIncomeGroups
+      .map((group) => ({
+        ...group,
+        amountValue: Number(group.amount),
+        investment: investments.find((investment) => investment.id === group.investmentId) ?? null,
+      }))
+      .filter((group) => group.investment && Number.isFinite(group.amountValue) && group.amountValue > 0);
+
+    if (matchedGroups.length === 0) {
+      setScreenshotIncomeError("There are no matched income groups to add.");
+      return;
+    }
+
+    setApplyingScreenshotIncome(true);
+    setScreenshotIncomeError(null);
+
+    try {
+      for (const group of matchedGroups) {
+        if (!group.investment) {
+          continue;
+        }
+
+        const response = await fetch(getAppPath(`/api/investments/${group.investment.id}/income`), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            amount: group.amountValue,
+            description: `Screenshot income from ${screenshotIncomeFileName || "Devices screenshot"} (${group.deviceNames.join(", ")})`,
+          }),
+        });
+        const result = (await response.json()) as { error?: string };
+
+        if (!response.ok) {
+          throw new Error(result.error ?? `Failed to add income for ${group.key}.`);
+        }
+      }
+
+      await Promise.all([loadInvestments(false), loadAuditLogs()]);
+      setScreenshotIncomeError(`Added ${matchedGroups.length} screenshot income record${matchedGroups.length === 1 ? "" : "s"}.`);
+      setScreenshotIncomeGroups([]);
+      setScreenshotIncomeRawText("");
+      setScreenshotIncomeStatus("");
+      setScreenshotIncomeProgress(0);
+    } catch (applyError) {
+      setScreenshotIncomeError(applyError instanceof Error ? applyError.message : "Failed to add screenshot income.");
+    } finally {
+      setApplyingScreenshotIncome(false);
+    }
+  }
+
+  function updateScreenshotIncomeGroup(groupId: string, updates: Partial<ScreenshotIncomeGroup>) {
+    setScreenshotIncomeGroups((currentGroups) => currentGroups.map((group) => (group.id === groupId ? { ...group, ...updates } : group)));
+  }
+
+  function rejectScreenshotIncomeGroup(groupId: string) {
+    setScreenshotIncomeGroups((currentGroups) => currentGroups.filter((group) => group.id !== groupId));
+  }
+
+  function rejectScreenshotIncome() {
+    setScreenshotIncomeGroups([]);
+    setScreenshotIncomeRawText("");
+    setScreenshotIncomeError(null);
+    setScreenshotIncomeStatus("");
+    setScreenshotIncomeProgress(0);
+    setScreenshotIncomeFileName("");
   }
 
   function addImageMergeFiles(files: FileList | File[]) {
@@ -1376,6 +1554,147 @@ export default function InvestmentsPage() {
           </div>
 
           <div className="imageMergerBody">
+            <section className="screenshotIncomeTool" aria-label="Screenshot income importer">
+              <div className="screenshotIncomeHeader">
+                <div>
+                  <span>Income Screenshot</span>
+                  <strong>Add device amounts to matching expenditures</strong>
+                </div>
+                <button
+                  type="button"
+                  className="loadConfig"
+                  onClick={() => screenshotIncomeInputRef.current?.click()}
+                  disabled={scanningIncomeScreenshot || applyingScreenshotIncome}
+                >
+                  <FileUp size={17} />
+                  {scanningIncomeScreenshot ? "Scanning..." : "Upload"}
+                </button>
+              </div>
+
+              <input
+                ref={screenshotIncomeInputRef}
+                type="file"
+                accept="image/*,.png,.jpg,.jpeg,.webp,.gif,.bmp,.avif"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+
+                  if (file) {
+                    void scanIncomeScreenshot(file);
+                  }
+
+                  event.target.value = "";
+                }}
+              />
+
+              {screenshotIncomeStatus ? (
+                <div className="screenshotIncomeStatus">
+                  <span>{screenshotIncomeStatus}</span>
+                  <strong>{Math.round(screenshotIncomeProgress * 100)}%</strong>
+                </div>
+              ) : null}
+
+              {screenshotIncomeError ? <div className="notice">{screenshotIncomeError}</div> : null}
+
+              <div className="screenshotIncomePreview">
+                {screenshotIncomeGroups.length === 0 ? (
+                  <div className="imageMergeEmpty">Upload a Devices screenshot to preview matched income.</div>
+                ) : (
+                  screenshotIncomeGroups.map((group) => (
+                    <div className={`screenshotIncomeItem ${group.investmentId ? "" : "unmatched"}`} key={group.id}>
+                      <label>
+                        <span>Group</span>
+                        <input
+                          value={group.key}
+                          onChange={(event) => updateScreenshotIncomeGroup(group.id, { key: event.target.value })}
+                          aria-label="Device group name"
+                        />
+                      </label>
+                      <label>
+                        <span>Amount</span>
+                        <input
+                          value={group.amount}
+                          onChange={(event) => updateScreenshotIncomeGroup(group.id, { amount: event.target.value })}
+                          inputMode="decimal"
+                          aria-label="Income amount"
+                        />
+                      </label>
+                      <label>
+                        <span>Expenditure</span>
+                        <select
+                          value={group.investmentId ?? ""}
+                          onChange={(event) =>
+                            updateScreenshotIncomeGroup(group.id, { investmentId: event.target.value ? Number(event.target.value) : null })
+                          }
+                          aria-label="Matched expenditure"
+                        >
+                          <option value="">No match</option>
+                          {investments.map((investment) => (
+                            <option key={investment.id} value={investment.id}>
+                              {getInvestmentName(investment)}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        <span>Devices</span>
+                        <input
+                          value={group.deviceNames.join(", ")}
+                          onChange={(event) =>
+                            updateScreenshotIncomeGroup(group.id, {
+                              deviceNames: event.target.value
+                                .split(",")
+                                .map((deviceName) => deviceName.trim())
+                                .filter(Boolean),
+                            })
+                          }
+                          aria-label="Device names"
+                        />
+                      </label>
+                      <button type="button" className="dangerIcon" onClick={() => rejectScreenshotIncomeGroup(group.id)} aria-label="Reject row">
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {screenshotIncomeRawText ? (
+                <details className="screenshotIncomeRaw">
+                  <summary>OCR Text</summary>
+                  <textarea value={screenshotIncomeRawText} readOnly aria-label="OCR text from income screenshot" />
+                </details>
+              ) : null}
+
+              {screenshotIncomeGroups.length > 0 ? (
+                <div className="screenshotIncomeActions">
+                  <button
+                    type="button"
+                    className="secondaryButton"
+                    onClick={rejectScreenshotIncome}
+                    disabled={scanningIncomeScreenshot || applyingScreenshotIncome}
+                  >
+                    <X size={17} />
+                    Reject
+                  </button>
+                  <button
+                    type="button"
+                    className="loadConfig"
+                    onClick={() => void applyScreenshotIncome()}
+                    disabled={
+                      scanningIncomeScreenshot ||
+                      applyingScreenshotIncome ||
+                      screenshotIncomeGroups.every(
+                        (group) => !group.investmentId || !Number.isFinite(Number(group.amount)) || Number(group.amount) <= 0,
+                      )
+                    }
+                  >
+                    <Check size={17} />
+                    {applyingScreenshotIncome ? "Recording..." : "Confirm"}
+                  </button>
+                </div>
+              ) : null}
+            </section>
+
             <section className="aiPromptTool" aria-label="AI device totals prompt">
               <div>
                 <span>AI Prompt</span>
