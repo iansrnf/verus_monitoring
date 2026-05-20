@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import { ArrowLeft, RefreshCw, Search, Smartphone, Trash2, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ArrowLeft, Check, RefreshCw, Save, Search, Smartphone, Trash2, X } from "lucide-react";
 import { LogoutButton } from "@/app/components/LogoutButton";
 
 type EarnAppDevice = {
@@ -18,6 +18,11 @@ type EarnAppDevice = {
   uptime: number;
   total_uptime: number;
   raw?: unknown;
+};
+
+type Investment = {
+  id: number;
+  name: string | null;
 };
 
 const APP_BASE_PATH = "/verus-monitoring";
@@ -75,14 +80,50 @@ function getDeviceSearchText(device: EarnAppDevice) {
   return JSON.stringify(device.raw ?? device).toLowerCase();
 }
 
+function getInvestmentName(investment: Investment) {
+  return investment.name?.trim() || "Untitled investment";
+}
+
+function getDeviceIncomeKey(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "")
+    .replace(/\d+$/g, "");
+}
+
 export default function EarnAppDevicesPage() {
   const [cookie, setCookie] = useState("");
   const [devices, setDevices] = useState<EarnAppDevice[]>([]);
+  const [investments, setInvestments] = useState<Investment[]>([]);
   const [checkedAt, setCheckedAt] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [deletingUuid, setDeletingUuid] = useState<string | null>(null);
+  const [pendingDeleteDevice, setPendingDeleteDevice] = useState<EarnAppDevice | null>(null);
+  const [targetInvestmentId, setTargetInvestmentId] = useState<number | null>(null);
+  const [incomeSaved, setIncomeSaved] = useState(false);
+  const [savingIncome, setSavingIncome] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function loadInvestments() {
+      try {
+        const response = await fetch(getAppPath("/api/investments"), { cache: "no-store" });
+        const result = (await response.json()) as { investments?: Investment[]; error?: string };
+
+        if (!response.ok) {
+          throw new Error(result.error ?? "Failed to load expenditures.");
+        }
+
+        setInvestments(result.investments ?? []);
+      } catch (loadError) {
+        setError(loadError instanceof Error ? loadError.message : "Failed to load expenditures.");
+      }
+    }
+
+    void loadInvestments();
+  }, []);
 
   async function loadEarnAppDevices() {
     const pastedCookie = cookie.trim();
@@ -117,6 +158,57 @@ export default function EarnAppDevicesPage() {
     }
   }
 
+  function openDeleteModal(device: EarnAppDevice) {
+    const key = getDeviceIncomeKey(device.title);
+    const matchingInvestment = investments.find((investment) => getDeviceIncomeKey(getInvestmentName(investment)) === key);
+
+    setPendingDeleteDevice(device);
+    setTargetInvestmentId(matchingInvestment?.id ?? null);
+    setIncomeSaved(device.earned <= 0);
+    setError(null);
+  }
+
+  async function saveDeviceIncome() {
+    if (!pendingDeleteDevice) {
+      return;
+    }
+
+    if (pendingDeleteDevice.earned <= 0) {
+      setIncomeSaved(true);
+      return;
+    }
+
+    if (!targetInvestmentId) {
+      setError("Choose the target expenditure before saving income.");
+      return;
+    }
+
+    setSavingIncome(true);
+    setError(null);
+
+    try {
+      const response = await fetch(getAppPath(`/api/investments/${targetInvestmentId}/income`), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: pendingDeleteDevice.earned,
+          description: `EarnApp income from ${pendingDeleteDevice.title}`,
+        }),
+      });
+      const result = (await response.json()) as { error?: string };
+
+      if (!response.ok) {
+        throw new Error(result.error ?? "Failed to save EarnApp income.");
+      }
+
+      setIncomeSaved(true);
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "Failed to save EarnApp income.");
+    } finally {
+      setSavingIncome(false);
+    }
+  }
+
   async function deleteEarnAppDevice(device: EarnAppDevice) {
     const pastedCookie = cookie.trim();
     const uuid = device.uuid.trim();
@@ -131,7 +223,8 @@ export default function EarnAppDevicesPage() {
       return;
     }
 
-    if (!window.confirm(`Delete ${device.title || uuid} from EarnApp?`)) {
+    if (device.earned > 0 && !incomeSaved) {
+      setError("Save the earned amount to an expenditure before deleting this device.");
       return;
     }
 
@@ -152,6 +245,9 @@ export default function EarnAppDevicesPage() {
       }
 
       setDevices((currentDevices) => currentDevices.filter((currentDevice) => currentDevice.uuid !== uuid));
+      setPendingDeleteDevice(null);
+      setIncomeSaved(false);
+      setTargetInvestmentId(null);
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : "Failed to delete EarnApp device.");
     } finally {
@@ -342,7 +438,7 @@ export default function EarnAppDevicesPage() {
                         <button
                           type="button"
                           className="dangerIcon"
-                          onClick={() => void deleteEarnAppDevice(device)}
+                          onClick={() => openDeleteModal(device)}
                           disabled={deletingUuid === device.uuid || !device.uuid}
                           aria-label={`Delete ${device.title}`}
                           title="Delete EarnApp device"
@@ -358,6 +454,88 @@ export default function EarnAppDevicesPage() {
           </table>
         </section>
       </div>
+
+      {pendingDeleteDevice ? (
+        <div className="toolModal" role="dialog" aria-modal="true" aria-label="Confirm EarnApp device delete">
+          <button className="toolModalBackdrop" type="button" aria-label="Close delete confirmation" onClick={() => setPendingDeleteDevice(null)} />
+          <div className="toolDialog earnAppDeleteDialog">
+            <div className="toolModalBar">
+              <div>
+                <span>Delete EarnApp Device</span>
+                <strong>{pendingDeleteDevice.title || pendingDeleteDevice.uuid}</strong>
+              </div>
+              <button type="button" aria-label="Close delete confirmation" onClick={() => setPendingDeleteDevice(null)}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="earnAppDeleteBody">
+              <div className="earnAppMetrics">
+                <div>
+                  <span>Earned</span>
+                  <strong>{formatUsd(pendingDeleteDevice.earned)}</strong>
+                </div>
+                <div>
+                  <span>UUID</span>
+                  <strong>{pendingDeleteDevice.uuid}</strong>
+                </div>
+              </div>
+
+              {pendingDeleteDevice.earned > 0 ? (
+                <label className="earnAppTargetField">
+                  <span>Target Expenditure</span>
+                  <select
+                    value={targetInvestmentId ?? ""}
+                    onChange={(event) => {
+                      setTargetInvestmentId(event.target.value ? Number(event.target.value) : null);
+                      setIncomeSaved(false);
+                    }}
+                    disabled={savingIncome || incomeSaved}
+                  >
+                    <option value="">No match</option>
+                    {investments.map((investment) => (
+                      <option key={investment.id} value={investment.id}>
+                        {getInvestmentName(investment)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : (
+                <div className="notice">This device earned {formatUsd(0)}, so delete is unlocked without saving income.</div>
+              )}
+
+              {pendingDeleteDevice.earned > 0 ? (
+                <button
+                  type="button"
+                  className="loadConfig"
+                  onClick={() => void saveDeviceIncome()}
+                  disabled={savingIncome || incomeSaved || !targetInvestmentId}
+                >
+                  {incomeSaved ? <Check size={17} /> : <Save size={17} />}
+                  {incomeSaved ? "Saved" : savingIncome ? "Saving..." : "Save Income"}
+                </button>
+              ) : null}
+
+              <div className="notice">Deleting is separate from saving. The device will stay in EarnApp until you press Delete Device.</div>
+            </div>
+
+            <div className="toolModalFooter">
+              <button type="button" className="secondaryButton" onClick={() => setPendingDeleteDevice(null)} disabled={deletingUuid === pendingDeleteDevice.uuid}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="loadConfig dangerButton"
+                onClick={() => void deleteEarnAppDevice(pendingDeleteDevice)}
+                disabled={deletingUuid === pendingDeleteDevice.uuid || (pendingDeleteDevice.earned > 0 && !incomeSaved)}
+              >
+                <Trash2 size={17} />
+                {deletingUuid === pendingDeleteDevice.uuid ? "Deleting..." : "Delete Device"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }

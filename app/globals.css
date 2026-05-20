@@ -346,6 +346,54 @@ select {
   overflow-y: visible;
 }
 
+.earnAppDeleteDialog {
+  width: min(620px, 100%);
+}
+
+.earnAppDeleteBody {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  overflow: auto;
+}
+
+.earnAppTargetField {
+  display: grid;
+  gap: 7px;
+}
+
+.earnAppTargetField span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.earnAppTargetField select {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  outline: 0;
+  background: #141619;
+  color: var(--text);
+  border-radius: 8px;
+  padding: 0 12px;
+}
+
+.earnAppTargetField select:focus {
+  border-color: var(--accent);
+}
+
+.dangerButton {
+  border-color: rgba(255, 107, 107, 0.45);
+  background: rgba(255, 107, 107, 0.12);
+}
+
+.dangerButton:hover:not(:disabled),
+.dangerButton:focus-visible:not(:disabled) {
+  border-color: var(--offline);
+}
+
 .currentConfigHeader button {
   display: inline-flex;
   align-items: center;
