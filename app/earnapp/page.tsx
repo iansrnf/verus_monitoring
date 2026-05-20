@@ -25,6 +25,11 @@ type Investment = {
   name: string | null;
 };
 
+type VerusDevice = {
+  name: string | null;
+  status: boolean | null;
+};
+
 type EarnAppDeviceGroup = {
   key: string;
   label: string;
@@ -38,7 +43,7 @@ type PendingDeleteSelection = {
   devices: EarnAppDevice[];
 };
 
-type EarnAppTab = "group" | "devices";
+type EarnAppTab = "group" | "devices" | "recommended";
 
 const APP_BASE_PATH = "/verus-monitoring";
 
@@ -107,6 +112,10 @@ function getDeviceIncomeKey(value: string) {
     .replace(/\d+$/g, "");
 }
 
+function getDeviceNameKey(value: string | null) {
+  return value?.trim().toLowerCase() ?? "";
+}
+
 function getDeviceGroupLabel(device: EarnAppDevice) {
   const key = getDeviceIncomeKey(device.title);
 
@@ -120,6 +129,7 @@ function getSelectionEarned(selection: PendingDeleteSelection | null) {
 export default function EarnAppDevicesPage() {
   const [cookie, setCookie] = useState("");
   const [devices, setDevices] = useState<EarnAppDevice[]>([]);
+  const [verusDevices, setVerusDevices] = useState<VerusDevice[]>([]);
   const [investments, setInvestments] = useState<Investment[]>([]);
   const [checkedAt, setCheckedAt] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -133,22 +143,31 @@ export default function EarnAppDevicesPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    async function loadInvestments() {
+    async function loadPageData() {
       try {
-        const response = await fetch(getAppPath("/api/investments"), { cache: "no-store" });
-        const result = (await response.json()) as { investments?: Investment[]; error?: string };
+        const [investmentsResponse, devicesResponse] = await Promise.all([
+          fetch(getAppPath("/api/investments"), { cache: "no-store" }),
+          fetch(getAppPath("/api/devices"), { cache: "no-store" }),
+        ]);
+        const investmentsResult = (await investmentsResponse.json()) as { investments?: Investment[]; error?: string };
+        const devicesResult = (await devicesResponse.json()) as { devices?: VerusDevice[]; error?: string };
 
-        if (!response.ok) {
-          throw new Error(result.error ?? "Failed to load expenditures.");
+        if (!investmentsResponse.ok) {
+          throw new Error(investmentsResult.error ?? "Failed to load expenditures.");
         }
 
-        setInvestments(result.investments ?? []);
+        if (!devicesResponse.ok) {
+          throw new Error(devicesResult.error ?? "Failed to load Verus devices.");
+        }
+
+        setInvestments(investmentsResult.investments ?? []);
+        setVerusDevices(devicesResult.devices ?? []);
       } catch (loadError) {
-        setError(loadError instanceof Error ? loadError.message : "Failed to load expenditures.");
+        setError(loadError instanceof Error ? loadError.message : "Failed to load page data.");
       }
     }
 
-    void loadInvestments();
+    void loadPageData();
   }, []);
 
   async function loadEarnAppDevices() {
@@ -331,6 +350,15 @@ export default function EarnAppDevicesPage() {
     }));
   }, [filteredDevices]);
 
+  const offlineVerusDeviceNames = useMemo(
+    () => new Set(verusDevices.filter((device) => !device.status).map((device) => getDeviceNameKey(device.name)).filter(Boolean)),
+    [verusDevices],
+  );
+  const recommendedDevices = useMemo(
+    () => filteredDevices.filter((device) => offlineVerusDeviceNames.has(getDeviceNameKey(device.title))),
+    [filteredDevices, offlineVerusDeviceNames],
+  );
+  const visibleTableDevices = earnAppTab === "recommended" ? recommendedDevices : filteredDevices;
   const activeCount = devices.filter(isEarnAppDeviceActive).length;
   const earned = devices.reduce((total, device) => total + device.earned, 0);
   const earnedTotal = devices.reduce((total, device) => total + device.earned_total, 0);
@@ -447,6 +475,15 @@ export default function EarnAppDevicesPage() {
             <Smartphone size={16} aria-hidden="true" />
             <span>All Devices {filteredDevices.length}</span>
           </button>
+          <button
+            className={`tab ${earnAppTab === "recommended" ? "active" : ""}`}
+            onClick={() => setEarnAppTab("recommended")}
+            role="tab"
+            aria-selected={earnAppTab === "recommended"}
+          >
+            <Trash2 size={16} aria-hidden="true" />
+            <span>Recommended {recommendedDevices.length}</span>
+          </button>
         </div>
 
         {earnAppTab === "group" ? (
@@ -521,14 +558,18 @@ export default function EarnAppDevicesPage() {
                       Loading EarnApp devices...
                     </td>
                   </tr>
-                ) : filteredDevices.length === 0 ? (
+                ) : visibleTableDevices.length === 0 ? (
                   <tr>
                     <td className="empty" colSpan={10}>
-                      {devices.length > 0 ? "No EarnApp devices match your search." : "Paste a cookie and load devices."}
+                      {devices.length > 0
+                        ? earnAppTab === "recommended"
+                          ? "No EarnApp devices match offline Verus devices."
+                          : "No EarnApp devices match your search."
+                        : "Paste a cookie and load devices."}
                     </td>
                   </tr>
                 ) : (
-                  filteredDevices.map((device, index) => {
+                  visibleTableDevices.map((device, index) => {
                     const active = isEarnAppDeviceActive(device);
 
                     return (
