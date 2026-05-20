@@ -6,6 +6,7 @@ import { ArrowLeft, RefreshCw, Search, Smartphone, X } from "lucide-react";
 import { LogoutButton } from "@/app/components/LogoutButton";
 
 type EarnAppDevice = {
+  [key: string]: unknown;
   uuid: string;
   title: string;
   rate: number;
@@ -16,6 +17,7 @@ type EarnAppDevice = {
   billing: string;
   uptime: number;
   total_uptime: number;
+  raw?: unknown;
 };
 
 const APP_BASE_PATH = "/verus-monitoring";
@@ -69,6 +71,10 @@ function isEarnAppDeviceActive(device: EarnAppDevice) {
   return device.uptime > 0 || device.earned > 0;
 }
 
+function getDeviceSearchText(device: EarnAppDevice) {
+  return JSON.stringify(device.raw ?? device).toLowerCase();
+}
+
 export default function EarnAppDevicesPage() {
   const [cookie, setCookie] = useState("");
   const [devices, setDevices] = useState<EarnAppDevice[]>([]);
@@ -112,15 +118,12 @@ export default function EarnAppDevicesPage() {
 
   const filteredDevices = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    const sortedDevices = [...devices].sort((firstDevice, secondDevice) =>
-      firstDevice.title.localeCompare(secondDevice.title, undefined, { numeric: true, sensitivity: "base" }),
-    );
 
     if (!needle) {
-      return sortedDevices;
+      return devices;
     }
 
-    return sortedDevices.filter((device) =>
+    return devices.filter((device) =>
       [
         device.title,
         device.uuid,
@@ -133,7 +136,7 @@ export default function EarnAppDevicesPage() {
         formatUptime(device.total_uptime),
         ...device.ips,
         isEarnAppDeviceActive(device) ? "active" : "offline",
-      ].some((value) => String(value).toLowerCase().includes(needle)),
+      ].some((value) => String(value).toLowerCase().includes(needle)) || getDeviceSearchText(device).includes(needle),
     );
   }, [devices, query]);
 
@@ -263,11 +266,11 @@ export default function EarnAppDevicesPage() {
                   </td>
                 </tr>
               ) : (
-                filteredDevices.map((device) => {
+                filteredDevices.map((device, index) => {
                   const active = isEarnAppDeviceActive(device);
 
                   return (
-                    <tr key={device.uuid || device.title}>
+                    <tr key={device.uuid || `${device.title}-${index}`}>
                       <td>
                         <div className="deviceName">
                           <strong>{device.title}</strong>

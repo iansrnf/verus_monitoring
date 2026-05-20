@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 type EarnAppDevice = {
+  [key: string]: unknown;
   uuid?: unknown;
   title?: unknown;
   rate?: unknown;
@@ -76,6 +77,7 @@ function toNumber(value: unknown) {
 
 function normalizeEarnAppDevice(device: EarnAppDevice) {
   return {
+    ...device,
     uuid: typeof device.uuid === "string" ? device.uuid : "",
     title: typeof device.title === "string" ? device.title : "Unnamed device",
     rate: toNumber(device.rate),
@@ -86,6 +88,7 @@ function normalizeEarnAppDevice(device: EarnAppDevice) {
     billing: typeof device.billing === "string" ? device.billing : "",
     uptime: toNumber(device.uptime),
     total_uptime: toNumber(device.total_uptime),
+    raw: device,
   };
 }
 
@@ -138,7 +141,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       checkedAt: new Date().toISOString(),
+      sourceCount: data.length,
       devices: data.map((device) => normalizeEarnAppDevice(device as EarnAppDevice)),
+      rawDevices: data,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to load EarnApp devices.";
