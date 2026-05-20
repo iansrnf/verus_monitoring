@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Check, RefreshCw, Save, Search, Smartphone, Trash2, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeft, Check, FileUp, Pencil, RefreshCw, Save, Search, Smartphone, Trash2, X } from "lucide-react";
 import { LogoutButton } from "@/app/components/LogoutButton";
 
 type EarnAppDevice = {
@@ -46,6 +46,13 @@ type PendingDeleteSelection = {
 type EarnAppTab = "group" | "devices" | "recommended";
 
 const APP_BASE_PATH = "/verus-monitoring";
+const EARNAPP_COOKIE_STORAGE_KEY = "earnapp-cookie-cache";
+const EARNAPP_COOKIE_TTL_MS = 60 * 60 * 1000;
+
+type SavedEarnAppCookie = {
+  cookie: string;
+  expiresAt: number;
+};
 
 function getAppPath(path: string) {
   return `${APP_BASE_PATH}${path}`;
@@ -126,8 +133,25 @@ function getSelectionEarned(selection: PendingDeleteSelection | null) {
   return selection?.devices.reduce((total, device) => total + device.earned, 0) ?? 0;
 }
 
+function getSavedCookieTimeLeft(expiresAt: number | null) {
+  if (!expiresAt) {
+    return "not saved";
+  }
+
+  const remainingMinutes = Math.max(0, Math.ceil((expiresAt - Date.now()) / 60_000));
+
+  if (remainingMinutes >= 60) {
+    return "valid for 1 hour";
+  }
+
+  return `valid for ${remainingMinutes} minute${remainingMinutes === 1 ? "" : "s"}`;
+}
+
 export default function EarnAppDevicesPage() {
   const [cookie, setCookie] = useState("");
+  const [savedCookie, setSavedCookie] = useState("");
+  const [savedCookieExpiresAt, setSavedCookieExpiresAt] = useState<number | null>(null);
+  const [editingCookie, setEditingCookie] = useState(true);
   const [devices, setDevices] = useState<EarnAppDevice[]>([]);
   const [verusDevices, setVerusDevices] = useState<VerusDevice[]>([]);
   const [investments, setInvestments] = useState<Investment[]>([]);
@@ -141,6 +165,59 @@ export default function EarnAppDevicesPage() {
   const [incomeSaved, setIncomeSaved] = useState(false);
   const [savingIncome, setSavingIncome] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const cookieFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const activeCookie = savedCookieExpiresAt ? savedCookie : "";
+
+  function applySavedCookie(nextCookie: string, expiresAt: number) {
+    setSavedCookie(nextCookie);
+    setSavedCookieExpiresAt(expiresAt);
+    setCookie(nextCookie);
+    setEditingCookie(false);
+  }
+
+  function saveCookie() {
+    const nextCookie = cookie.trim();
+
+    if (!nextCookie) {
+      setError("Paste or upload your EarnApp cookie first.");
+      return;
+    }
+
+    const expiresAt = Date.now() + EARNAPP_COOKIE_TTL_MS;
+    const savedValue: SavedEarnAppCookie = { cookie: nextCookie, expiresAt };
+
+    window.localStorage.setItem(EARNAPP_COOKIE_STORAGE_KEY, JSON.stringify(savedValue));
+    applySavedCookie(nextCookie, expiresAt);
+    setError(null);
+  }
+
+  function editCookie() {
+    setEditingCookie(true);
+    setCookie(activeCookie || savedCookie);
+  }
+
+  function requireActiveCookie() {
+    if (activeCookie) {
+      return activeCookie;
+    }
+
+    setSavedCookie("");
+    setSavedCookieExpiresAt(null);
+    setEditingCookie(true);
+    window.localStorage.removeItem(EARNAPP_COOKIE_STORAGE_KEY);
+    setError("Your saved EarnApp cookie expired. Paste or upload it again.");
+
+    return "";
+  }
+
+  async function uploadCookieFile(file: File) {
+    const text = await file.text();
+
+    setCookie(text);
+    setEditingCookie(true);
+    setError(null);
+  }
 
   useEffect(() => {
     async function loadPageData() {
@@ -170,11 +247,53 @@ export default function EarnAppDevicesPage() {
     void loadPageData();
   }, []);
 
+  useEffect(() => {
+    try {
+      const storedCookie = window.localStorage.getItem(EARNAPP_COOKIE_STORAGE_KEY);
+
+      if (!storedCookie) {
+        return;
+      }
+
+      const parsedCookie = JSON.parse(storedCookie) as SavedEarnAppCookie;
+
+      if (typeof parsedCookie.cookie !== "string" || !Number.isFinite(parsedCookie.expiresAt)) {
+        return;
+      }
+
+      if (parsedCookie.expiresAt <= Date.now()) {
+        window.localStorage.removeItem(EARNAPP_COOKIE_STORAGE_KEY);
+        return;
+      }
+
+      window.setTimeout(() => applySavedCookie(parsedCookie.cookie, parsedCookie.expiresAt), 0);
+    } catch {
+      window.localStorage.removeItem(EARNAPP_COOKIE_STORAGE_KEY);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!savedCookieExpiresAt) {
+      return;
+    }
+
+    const timeout = window.setTimeout(
+      () => {
+        setSavedCookie("");
+        setSavedCookieExpiresAt(null);
+        setEditingCookie(true);
+        window.localStorage.removeItem(EARNAPP_COOKIE_STORAGE_KEY);
+      },
+      Math.max(0, savedCookieExpiresAt - Date.now()),
+    );
+
+    return () => window.clearTimeout(timeout);
+  }, [savedCookieExpiresAt]);
+
   async function loadEarnAppDevices() {
-    const pastedCookie = cookie.trim();
+    const pastedCookie = requireActiveCookie();
 
     if (!pastedCookie) {
-      setError("Paste your EarnApp cookie header or cookies.json export first.");
       return;
     }
 
@@ -257,12 +376,11 @@ export default function EarnAppDevicesPage() {
   }
 
   async function deleteEarnAppSelection(selection: PendingDeleteSelection) {
-    const pastedCookie = cookie.trim();
+    const pastedCookie = requireActiveCookie();
     const earnedAmount = getSelectionEarned(selection);
     const devicesToDelete = selection.devices.filter((device) => device.uuid.trim());
 
     if (!pastedCookie) {
-      setError("Paste your EarnApp cookie header or cookies.json export first.");
       return;
     }
 
@@ -403,24 +521,68 @@ export default function EarnAppDevicesPage() {
           <div className="earnAppHeader">
             <div>
               <span>EarnApp API</span>
-              <strong>Paste cookie or exported cookies JSON</strong>
+              <strong>{activeCookie && !editingCookie ? `Cookie saved, ${getSavedCookieTimeLeft(savedCookieExpiresAt)}` : "Paste cookie or exported cookies JSON"}</strong>
             </div>
-            <button className="loadConfig" type="button" onClick={() => void loadEarnAppDevices()} disabled={loading || !cookie.trim()}>
+            <button className="loadConfig" type="button" onClick={() => void loadEarnAppDevices()} disabled={loading || !activeCookie}>
               <RefreshCw size={17} />
               {loading ? "Loading..." : "Load Devices"}
             </button>
           </div>
 
-          <label className="earnAppCookieField">
-            <span>Cookie or JSON export</span>
-            <textarea
-              value={cookie}
-              onChange={(event) => setCookie(event.target.value)}
-              placeholder="Paste the full Cookie header, or the exported cookies.json array"
-              spellCheck={false}
-              aria-label="EarnApp cookie"
-            />
-          </label>
+          <input
+            ref={cookieFileInputRef}
+            type="file"
+            accept="application/json,.json,text/plain,.txt"
+            className="hiddenInput"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+
+              if (file) {
+                void uploadCookieFile(file);
+              }
+
+              event.target.value = "";
+            }}
+          />
+
+          {editingCookie || !activeCookie ? (
+            <div className="earnAppCookieEditor">
+              <label className="earnAppCookieField">
+                <span>Cookie or JSON export</span>
+                <textarea
+                  value={cookie}
+                  onChange={(event) => setCookie(event.target.value)}
+                  placeholder="Paste the full Cookie header, or the exported cookies.json array"
+                  spellCheck={false}
+                  aria-label="EarnApp cookie"
+                />
+              </label>
+              <div className="earnAppCookieActions">
+                <button type="button" className="secondaryButton" onClick={() => cookieFileInputRef.current?.click()}>
+                  <FileUp size={17} />
+                  Upload cookies.json
+                </button>
+                <button type="button" className="loadConfig" onClick={saveCookie} disabled={!cookie.trim()}>
+                  <Save size={17} />
+                  Save for 1 hour
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="earnAppCookieSaved">
+              <span>{getSavedCookieTimeLeft(savedCookieExpiresAt)}</span>
+              <div>
+                <button type="button" className="secondaryButton" onClick={editCookie}>
+                  <Pencil size={17} />
+                  Edit Cookie
+                </button>
+                <button type="button" className="secondaryButton" onClick={() => cookieFileInputRef.current?.click()}>
+                  <FileUp size={17} />
+                  Upload New JSON
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="earnAppMetrics">
             <div>

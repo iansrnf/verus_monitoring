@@ -248,6 +248,38 @@ select {
   border-color: var(--accent);
 }
 
+.hiddenInput {
+  display: none;
+}
+
+.earnAppCookieEditor {
+  display: grid;
+  gap: 10px;
+}
+
+.earnAppCookieActions,
+.earnAppCookieSaved,
+.earnAppCookieSaved div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.earnAppCookieSaved {
+  justify-content: space-between;
+  border: 1px solid var(--line);
+  background: #141619;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.earnAppCookieSaved > span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
 .earnAppMetrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
