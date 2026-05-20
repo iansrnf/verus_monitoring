@@ -9,13 +9,9 @@ import {
   Check,
   Download,
   FileUp,
-  FolderOpen,
   History,
   Images,
   LineChart,
-  Clipboard,
-  MoveDown,
-  MoveUp,
   Pencil,
   Plus,
   ReceiptText,
@@ -64,13 +60,6 @@ type InvestmentSortKey = "name" | "cost" | "created_at";
 type SortDirection = "asc" | "desc";
 type InvestmentChartMode = "line" | "bar";
 
-type ImageMergeItem = {
-  id: string;
-  name: string;
-  size: number;
-  url: string;
-};
-
 type ScreenshotIncomeGroup = {
   id: string;
   key: string;
@@ -79,31 +68,11 @@ type ScreenshotIncomeGroup = {
   investmentId: number | null;
 };
 
-type TesseractLoggerMessage = {
-  progress: number;
-  status: string;
+type EarnAppDevice = {
+  uuid: string;
+  title: string;
+  earned: number;
 };
-
-type TesseractBrowserApi = {
-  recognize: (
-    image: File,
-    langs?: string,
-    options?: {
-      logger?: (message: TesseractLoggerMessage) => void;
-    },
-  ) => Promise<{
-    data: {
-      text: string;
-    };
-  }>;
-};
-
-declare global {
-  interface Window {
-    Tesseract?: TesseractBrowserApi;
-    tesseractLoader?: Promise<TesseractBrowserApi>;
-  }
-}
 
 type ChartPoint = {
   id: string;
@@ -115,41 +84,6 @@ type ChartPoint = {
 
 const APP_BASE_PATH = "/verus-monitoring";
 const USD_TO_PHP = 61.458;
-const MAX_MERGED_IMAGE_WIDTH = 2400;
-const MAX_MERGED_IMAGE_HEIGHT = 30000;
-const IMAGE_FILE_EXTENSION_PATTERN = /\.(avif|bmp|gif|jpe?g|png|webp)$/i;
-const TESSERACT_SCRIPT_URL = "https://cdn.jsdelivr.net/npm/tesseract.js@7/dist/tesseract.min.js";
-const MAX_DEVICE_ROW_AMOUNT = 1;
-const DEVICE_TOTALS_PROMPT = `Analyze the stitched screenshot image I attach.
-
-The image contains one or more Devices tables. Each row has columns similar to:
-Device, Country, Usage, Rate, Amount.
-
-Please OCR every visible row and summarize totals by device name prefix.
-
-Rules:
-1. Treat names with the same text prefix and a trailing number as one group.
-   Examples:
-   - samuelhny1, samuelhny2, samuelhny7 => samuelhny*
-   - xavierhny1, xavierhny2, xavierhny7 => xavierhny*
-   - boyetproton1, boyetproton7 => boyetproton*
-2. If a device name has no trailing number, keep it as its own group.
-3. Use the Amount column for totals. Amount values are USD.
-4. Count how many rows/devices are included in each group.
-5. Include the device names that were grouped under each prefix.
-6. If a row is repeated across screenshots, count it only once when the same device name appears again with the same usage and amount.
-7. Show uncertain OCR rows separately instead of guessing.
-
-Return the result in this format:
-
-| Group | Devices Count | Total Amount | Device Names |
-|---|---:|---:|---|
-| samuelhny* | 7 | $0.000 | samuelhny1, samuelhny2, ... |
-
-Then add:
-- Grand total amount
-- Grand total devices counted
-- Uncertain rows, if any`;
 
 function getAppPath(path: string) {
   return `${APP_BASE_PATH}${path}`;
@@ -180,40 +114,6 @@ function createLocalId(prefix: string) {
   return `${prefix}-${Date.now()}-${randomId}`;
 }
 
-function isImageFile(file: File) {
-  return file.type.startsWith("image/") || IMAGE_FILE_EXTENSION_PATTERN.test(file.name);
-}
-
-function loadTesseract() {
-  if (typeof window === "undefined") {
-    return Promise.reject(new Error("OCR is only available in the browser."));
-  }
-
-  if (window.Tesseract) {
-    return Promise.resolve(window.Tesseract);
-  }
-
-  window.tesseractLoader ??= new Promise<TesseractBrowserApi>((resolve, reject) => {
-    const script = document.createElement("script");
-
-    script.async = true;
-    script.crossOrigin = "anonymous";
-    script.src = TESSERACT_SCRIPT_URL;
-    script.onload = () => {
-      if (window.Tesseract) {
-        resolve(window.Tesseract);
-        return;
-      }
-
-      reject(new Error("OCR engine loaded, but Tesseract was not available."));
-    };
-    script.onerror = () => reject(new Error("Failed to load the OCR engine. Check the server/browser internet access."));
-    document.head.appendChild(script);
-  });
-
-  return window.tesseractLoader;
-}
-
 function getDeviceIncomeKey(value: string) {
   return value
     .trim()
@@ -222,74 +122,17 @@ function getDeviceIncomeKey(value: string) {
     .replace(/\d+$/g, "");
 }
 
-function isDeviceNameCandidate(value: string) {
-  const key = getDeviceIncomeKey(value);
-
-  return key.length >= 3 && /[a-z]{3}/i.test(key);
-}
-
-function getDeviceAmounts(value: string) {
-  return [...value.matchAll(/(?:[$S]\s*)?((?:[0oO])?[.,]\d{2,6})\b/g)]
-    .map((match) => {
-      const normalizedAmount = match[1].replace(/[oO]/g, "0").replace(",", ".");
-      const amountText = normalizedAmount.startsWith(".") ? `0${normalizedAmount}` : normalizedAmount;
-
-      return Number(amountText);
-    })
-    .filter((amount) => Number.isFinite(amount) && amount > 0 && amount < MAX_DEVICE_ROW_AMOUNT);
-}
-
-function getDeviceRowAmount(row: string) {
-  const candidates = getDeviceAmounts(row);
-
-  return candidates.at(-1) ?? null;
-}
-
-function parseDeviceIncomeText(text: string, investments: Investment[]) {
+function getEarnAppIncomeGroups(devices: EarnAppDevice[], investments: Investment[]) {
   const investmentByKey = new Map(investments.map((investment) => [getDeviceIncomeKey(getInvestmentName(investment)), investment]));
-  const rows = text
-    .split(/\r?\n/)
-    .map((line) => line.replace(/[|•]/g, " ").replace(/\s+/g, " ").trim())
-    .filter(Boolean);
-  const rowRecords: { deviceName: string; amount: number }[] = [];
-
-  for (const row of rows) {
-    const deviceName = row.match(/\b([a-z][a-z0-9_-]*\d+)\b/i)?.[1];
-
-    if (!deviceName || !isDeviceNameCandidate(deviceName)) {
-      continue;
-    }
-
-    const amount = getDeviceRowAmount(row);
-
-    if (amount === null) {
-      continue;
-    }
-
-    rowRecords.push({ deviceName: deviceName.toLowerCase(), amount });
-  }
-
-  const sequentialDeviceNames = rows
-    .flatMap((row) => [...row.matchAll(/\b([a-z][a-z0-9_-]*\d+)\b/gi)].map((match) => match[1]))
-    .filter(isDeviceNameCandidate)
-    .map((deviceName) => deviceName.toLowerCase());
-  const sequentialAmounts = rows.flatMap(getDeviceAmounts);
-  const sequentialRecords = sequentialDeviceNames.slice(0, sequentialAmounts.length).map((deviceName, index) => ({
-    deviceName,
-    amount: sequentialAmounts[index],
-  }));
-  const records = sequentialRecords.length > rowRecords.length ? sequentialRecords : rowRecords;
   const groups = new Map<string, { deviceNames: Set<string>; amount: number }>();
-  const seenDeviceAmounts = new Set<string>();
 
-  for (const { deviceName, amount } of records) {
-    const seenKey = `${deviceName}:${amount}`;
+  for (const device of devices) {
+    const deviceName = device.title.trim().toLowerCase();
+    const amount = Number(device.earned);
 
-    if (seenDeviceAmounts.has(seenKey)) {
+    if (!deviceName || !Number.isFinite(amount) || amount <= 0) {
       continue;
     }
-
-    seenDeviceAmounts.add(seenKey);
 
     const key = getDeviceIncomeKey(deviceName);
     const group = groups.get(key) ?? { deviceNames: new Set<string>(), amount: 0 };
@@ -309,7 +152,6 @@ function parseDeviceIncomeText(text: string, investments: Investment[]) {
     }))
     .sort((firstGroup, secondGroup) => firstGroup.key.localeCompare(secondGroup.key));
 }
-
 function formatDate(value: string | null) {
   if (!value) {
     return "-";
@@ -372,22 +214,12 @@ export default function InvestmentsPage() {
   const [editingInvestmentId, setEditingInvestmentId] = useState<number | null>(null);
   const [editingIncomeId, setEditingIncomeId] = useState<number | null>(null);
   const [imageMergerOpen, setImageMergerOpen] = useState(false);
-  const [imageMergeItems, setImageMergeItems] = useState<ImageMergeItem[]>([]);
-  const [imageMergeError, setImageMergeError] = useState<string | null>(null);
-  const [mergingImages, setMergingImages] = useState(false);
-  const [promptCopied, setPromptCopied] = useState(false);
-  const [screenshotIncomeFileName, setScreenshotIncomeFileName] = useState("");
+  const [earnAppCookie, setEarnAppCookie] = useState("");
   const [screenshotIncomeGroups, setScreenshotIncomeGroups] = useState<ScreenshotIncomeGroup[]>([]);
-  const [screenshotIncomeRawText, setScreenshotIncomeRawText] = useState("");
   const [screenshotIncomeError, setScreenshotIncomeError] = useState<string | null>(null);
-  const [screenshotIncomeStatus, setScreenshotIncomeStatus] = useState("");
-  const [screenshotIncomeProgress, setScreenshotIncomeProgress] = useState(0);
-  const [scanningIncomeScreenshot, setScanningIncomeScreenshot] = useState(false);
+  const [loadingEarnAppIncome, setLoadingEarnAppIncome] = useState(false);
   const [applyingScreenshotIncome, setApplyingScreenshotIncome] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
-  const screenshotIncomeInputRef = useRef<HTMLInputElement | null>(null);
-  const imageMergeInputRef = useRef<HTMLInputElement | null>(null);
-  const imageMergeItemsRef = useRef<ImageMergeItem[]>([]);
   const importModeRef = useRef<ImportMode>("native");
 
   const loadAuditLogs = useCallback(async () => {
@@ -429,16 +261,6 @@ export default function InvestmentsPage() {
     void loadInvestments();
     void loadAuditLogs();
   }, [loadAuditLogs, loadInvestments]);
-
-  useEffect(() => {
-    imageMergeItemsRef.current = imageMergeItems;
-  }, [imageMergeItems]);
-
-  useEffect(() => {
-    return () => {
-      imageMergeItemsRef.current.forEach((item) => URL.revokeObjectURL(item.url));
-    };
-  }, []);
 
   const selectedInvestment = useMemo(
     () => investments.find((investment) => investment.id === selectedInvestmentId) ?? investments[0] ?? null,
@@ -823,45 +645,44 @@ export default function InvestmentsPage() {
     URL.revokeObjectURL(url);
   }
 
-  async function scanIncomeScreenshot(file: File) {
-    if (!isImageFile(file)) {
-      setScreenshotIncomeError("Choose a PNG/JPG/WebP screenshot.");
+  async function loadEarnAppIncome() {
+    const cookie = earnAppCookie.trim();
+
+    if (!cookie) {
+      setScreenshotIncomeError("Paste your EarnApp cookie header or cookies.json export first.");
       return;
     }
 
-    setScanningIncomeScreenshot(true);
-    setScreenshotIncomeFileName(file.name);
-    setScreenshotIncomeGroups([]);
-    setScreenshotIncomeRawText("");
+    setLoadingEarnAppIncome(true);
     setScreenshotIncomeError(null);
-    setScreenshotIncomeStatus("Loading OCR engine");
-    setScreenshotIncomeProgress(0);
+    setScreenshotIncomeGroups([]);
 
     try {
-      const tesseract = await loadTesseract();
-      const result = await tesseract.recognize(file, "eng", {
-        logger: (message) => {
-          setScreenshotIncomeStatus(message.status);
-          setScreenshotIncomeProgress(Number.isFinite(message.progress) ? message.progress : 0);
-        },
+      const response = await fetch(getAppPath("/api/earnapp/devices"), {
+        method: "POST",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cookie }),
       });
-      const rawText = result.data.text;
-      const groups = parseDeviceIncomeText(rawText, investments);
+      const result = (await response.json()) as { devices?: EarnAppDevice[]; error?: string };
 
-      setScreenshotIncomeRawText(rawText);
+      if (!response.ok) {
+        throw new Error(result.error ?? "Failed to load EarnApp devices.");
+      }
+
+      const groups = getEarnAppIncomeGroups(result.devices ?? [], investments);
+
       setScreenshotIncomeGroups(groups);
-      setScreenshotIncomeStatus("Ready");
 
       if (groups.length === 0) {
-        setScreenshotIncomeError("I could not find device rows with Amount values. Try a clearer screenshot or crop around the Devices table.");
+        setScreenshotIncomeError("No EarnApp device earnings were found.");
       } else if (groups.every((group) => !group.investmentId)) {
-        setScreenshotIncomeError("I found device totals, but none matched an expenditure name. Example: sophiehny1 needs an expenditure named sophiehny.");
+        setScreenshotIncomeError("I found EarnApp totals, but none matched an expenditure name. Example: sophiehny1 needs an expenditure named sophiehny.");
       }
-    } catch (scanError) {
-      setScreenshotIncomeError(scanError instanceof Error ? scanError.message : "Failed to scan the screenshot.");
-      setScreenshotIncomeStatus("");
+    } catch (loadError) {
+      setScreenshotIncomeError(loadError instanceof Error ? loadError.message : "Failed to load EarnApp income.");
     } finally {
-      setScanningIncomeScreenshot(false);
+      setLoadingEarnAppIncome(false);
     }
   }
 
@@ -875,7 +696,7 @@ export default function InvestmentsPage() {
       .filter((group) => group.investment && Number.isFinite(group.amountValue) && group.amountValue > 0);
 
     if (matchedGroups.length === 0) {
-      setScreenshotIncomeError("There are no matched income groups to add.");
+      setScreenshotIncomeError("There are no matched EarnApp income groups to add.");
       return;
     }
 
@@ -893,7 +714,7 @@ export default function InvestmentsPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             amount: group.amountValue,
-            description: `Screenshot income from ${screenshotIncomeFileName || "Devices screenshot"} (${group.deviceNames.join(", ")})`,
+            description: `EarnApp income (${group.deviceNames.join(", ")})`,
           }),
         });
         const result = (await response.json()) as { error?: string };
@@ -904,13 +725,10 @@ export default function InvestmentsPage() {
       }
 
       await Promise.all([loadInvestments(false), loadAuditLogs()]);
-      setScreenshotIncomeError(`Added ${matchedGroups.length} screenshot income record${matchedGroups.length === 1 ? "" : "s"}.`);
+      setScreenshotIncomeError(`Added ${matchedGroups.length} EarnApp income record${matchedGroups.length === 1 ? "" : "s"}.`);
       setScreenshotIncomeGroups([]);
-      setScreenshotIncomeRawText("");
-      setScreenshotIncomeStatus("");
-      setScreenshotIncomeProgress(0);
     } catch (applyError) {
-      setScreenshotIncomeError(applyError instanceof Error ? applyError.message : "Failed to add screenshot income.");
+      setScreenshotIncomeError(applyError instanceof Error ? applyError.message : "Failed to add EarnApp income.");
     } finally {
       setApplyingScreenshotIncome(false);
     }
@@ -926,144 +744,8 @@ export default function InvestmentsPage() {
 
   function rejectScreenshotIncome() {
     setScreenshotIncomeGroups([]);
-    setScreenshotIncomeRawText("");
     setScreenshotIncomeError(null);
-    setScreenshotIncomeStatus("");
-    setScreenshotIncomeProgress(0);
-    setScreenshotIncomeFileName("");
   }
-
-  function addImageMergeFiles(files: FileList | File[]) {
-    const imageFiles = Array.from(files).filter(isImageFile);
-
-    if (imageFiles.length === 0) {
-      setImageMergeError("Drop or select PNG/JPG/WebP screenshot files.");
-      return;
-    }
-
-    try {
-      setImageMergeError(null);
-      setImageMergeItems((currentItems) => [
-        ...currentItems,
-        ...imageFiles.map((file) => ({
-          id: createLocalId(file.name),
-          name: file.name,
-          size: file.size,
-          url: URL.createObjectURL(file),
-        })),
-      ]);
-    } catch (uploadError) {
-      setImageMergeError(uploadError instanceof Error ? uploadError.message : "Failed to load the selected screenshots.");
-    }
-  }
-
-  function removeImageMergeItem(itemId: string) {
-    setImageMergeItems((currentItems) => {
-      const item = currentItems.find((candidate) => candidate.id === itemId);
-
-      if (item) {
-        URL.revokeObjectURL(item.url);
-      }
-
-      return currentItems.filter((candidate) => candidate.id !== itemId);
-    });
-  }
-
-  function clearImageMergeItems() {
-    imageMergeItemsRef.current.forEach((item) => URL.revokeObjectURL(item.url));
-    setImageMergeItems([]);
-    setImageMergeError(null);
-  }
-
-  function moveImageMergeItem(itemId: string, direction: -1 | 1) {
-    setImageMergeItems((currentItems) => {
-      const index = currentItems.findIndex((item) => item.id === itemId);
-      const nextIndex = index + direction;
-
-      if (index < 0 || nextIndex < 0 || nextIndex >= currentItems.length) {
-        return currentItems;
-      }
-
-      const nextItems = [...currentItems];
-      [nextItems[index], nextItems[nextIndex]] = [nextItems[nextIndex], nextItems[index]];
-      return nextItems;
-    });
-  }
-
-  function loadMergeImage(url: string) {
-    return new Promise<HTMLImageElement>((resolve, reject) => {
-      const image = new Image();
-      image.onload = () => resolve(image);
-      image.onerror = () => reject(new Error("Failed to load one of the screenshots."));
-      image.src = url;
-    });
-  }
-
-  async function exportMergedImage() {
-    if (imageMergeItems.length === 0) {
-      setImageMergeError("Add at least one screenshot first.");
-      return;
-    }
-
-    setMergingImages(true);
-    setImageMergeError(null);
-
-    try {
-      const images = await Promise.all(imageMergeItems.map((item) => loadMergeImage(item.url)));
-      const widestImage = Math.max(...images.map((image) => image.naturalWidth));
-      const fullSizeHeight = images
-        .map((image) => Math.round((image.naturalHeight * widestImage) / image.naturalWidth))
-        .reduce((total, height) => total + height, 0);
-      const widthScale = Math.min(1, MAX_MERGED_IMAGE_WIDTH / widestImage, MAX_MERGED_IMAGE_HEIGHT / fullSizeHeight);
-      const outputWidth = Math.max(1, Math.round(widestImage * widthScale));
-      const heights = images.map((image) => Math.max(1, Math.round((image.naturalHeight * outputWidth) / image.naturalWidth)));
-      const outputHeight = heights.reduce((total, height) => total + height, 0);
-      const canvas = document.createElement("canvas");
-      const context = canvas.getContext("2d");
-
-      if (!context) {
-        throw new Error("Canvas is not available in this browser.");
-      }
-
-      canvas.width = outputWidth;
-      canvas.height = outputHeight;
-
-      let offsetY = 0;
-      images.forEach((image, index) => {
-        context.drawImage(image, 0, offsetY, outputWidth, heights[index]);
-        offsetY += heights[index];
-      });
-
-      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
-
-      if (!blob) {
-        throw new Error("Failed to create the merged PNG.");
-      }
-
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-
-      link.href = url;
-      link.download = `merged-screenshots-${new Date().toISOString().slice(0, 10)}.png`;
-      link.click();
-      URL.revokeObjectURL(url);
-    } catch (mergeError) {
-      setImageMergeError(mergeError instanceof Error ? mergeError.message : "Failed to merge screenshots.");
-    } finally {
-      setMergingImages(false);
-    }
-  }
-
-  async function copyDeviceTotalsPrompt() {
-    try {
-      await navigator.clipboard.writeText(DEVICE_TOTALS_PROMPT);
-      setPromptCopied(true);
-      window.setTimeout(() => setPromptCopied(false), 1800);
-    } catch {
-      setImageMergeError("Your browser blocked clipboard access. Select the prompt text and copy it manually.");
-    }
-  }
-
   return (
     <>
     <main className="page investmentPage">
@@ -1643,64 +1325,53 @@ export default function InvestmentsPage() {
     </main>
 
     {imageMergerOpen ? (
-      <div className="toolModal" role="dialog" aria-modal="true" aria-label="Image merger">
-        <button className="toolModalBackdrop" type="button" aria-label="Close image merger" onClick={() => setImageMergerOpen(false)} />
+      <div className="toolModal" role="dialog" aria-modal="true" aria-label="EarnApp income importer">
+        <button className="toolModalBackdrop" type="button" aria-label="Close extra tools" onClick={() => setImageMergerOpen(false)} />
         <div className="toolDialog imageMergerDialog">
           <div className="toolModalBar">
             <div>
               <span>Extra Tools</span>
-              <strong>Image Merger</strong>
+              <strong>EarnApp Income</strong>
             </div>
-            <button type="button" aria-label="Close image merger" onClick={() => setImageMergerOpen(false)}>
+            <button type="button" aria-label="Close extra tools" onClick={() => setImageMergerOpen(false)}>
               <X size={18} />
             </button>
           </div>
 
           <div className="imageMergerBody">
-            <section className="screenshotIncomeTool" aria-label="Screenshot income importer">
+            <section className="screenshotIncomeTool" aria-label="EarnApp income importer">
               <div className="screenshotIncomeHeader">
                 <div>
-                  <span>Income Screenshot</span>
-                  <strong>Add device amounts to matching expenditures</strong>
+                  <span>EarnApp Devices</span>
+                  <strong>Add device earnings to matching expenditures</strong>
                 </div>
                 <button
                   type="button"
                   className="loadConfig"
-                  onClick={() => screenshotIncomeInputRef.current?.click()}
-                  disabled={scanningIncomeScreenshot || applyingScreenshotIncome}
+                  onClick={() => void loadEarnAppIncome()}
+                  disabled={loadingEarnAppIncome || applyingScreenshotIncome || !earnAppCookie.trim()}
                 >
-                  <FileUp size={17} />
-                  {scanningIncomeScreenshot ? "Scanning..." : "Upload"}
+                  <RefreshCw size={17} />
+                  {loadingEarnAppIncome ? "Loading..." : "Load EarnApp"}
                 </button>
               </div>
 
-              <input
-                ref={screenshotIncomeInputRef}
-                type="file"
-                accept="image/*,.png,.jpg,.jpeg,.webp,.gif,.bmp,.avif"
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-
-                  if (file) {
-                    void scanIncomeScreenshot(file);
-                  }
-
-                  event.target.value = "";
-                }}
-              />
-
-              {screenshotIncomeStatus ? (
-                <div className="screenshotIncomeStatus">
-                  <span>{screenshotIncomeStatus}</span>
-                  <strong>{Math.round(screenshotIncomeProgress * 100)}%</strong>
-                </div>
-              ) : null}
+              <label className="earnAppCookieField">
+                <span>Cookie or JSON export</span>
+                <textarea
+                  value={earnAppCookie}
+                  onChange={(event) => setEarnAppCookie(event.target.value)}
+                  placeholder="Paste the full Cookie header, or the exported cookies.json array"
+                  spellCheck={false}
+                  aria-label="EarnApp cookie"
+                />
+              </label>
 
               {screenshotIncomeError ? <div className="notice">{screenshotIncomeError}</div> : null}
 
               <div className="screenshotIncomePreview">
                 {screenshotIncomeGroups.length === 0 ? (
-                  <div className="imageMergeEmpty">Upload a Devices screenshot to preview matched income.</div>
+                  <div className="imageMergeEmpty">Load EarnApp devices to preview matched income.</div>
                 ) : (
                   screenshotIncomeGroups.map((group) => (
                     <div className={`screenshotIncomeItem ${group.investmentId ? "" : "unmatched"}`} key={group.id}>
@@ -1764,126 +1435,31 @@ export default function InvestmentsPage() {
                   ))
                 )}
               </div>
-
-              {screenshotIncomeRawText ? (
-                <details className="screenshotIncomeRaw">
-                  <summary>OCR Text</summary>
-                  <textarea value={screenshotIncomeRawText} readOnly aria-label="OCR text from income screenshot" />
-                </details>
-              ) : null}
-
-              {screenshotIncomeGroups.length > 0 ? (
-                <div className="screenshotIncomeActions">
-                  <button
-                    type="button"
-                    className="secondaryButton"
-                    onClick={rejectScreenshotIncome}
-                    disabled={scanningIncomeScreenshot || applyingScreenshotIncome}
-                  >
-                    <X size={17} />
-                    Reject
-                  </button>
-                  <button
-                    type="button"
-                    className="loadConfig"
-                    onClick={() => void applyScreenshotIncome()}
-                    disabled={
-                      scanningIncomeScreenshot ||
-                      applyingScreenshotIncome ||
-                      screenshotIncomeGroups.every(
-                        (group) => !group.investmentId || !Number.isFinite(Number(group.amount)) || Number(group.amount) <= 0,
-                      )
-                    }
-                  >
-                    <Check size={17} />
-                    {applyingScreenshotIncome ? "Recording..." : "Confirm"}
-                  </button>
-                </div>
-              ) : null}
             </section>
-
-            <section className="aiPromptTool" aria-label="AI device totals prompt">
-              <div>
-                <span>AI Prompt</span>
-                <strong>Summarize device totals from stitched image</strong>
-              </div>
-              <button type="button" className="loadConfig" onClick={() => void copyDeviceTotalsPrompt()}>
-                <Clipboard size={17} />
-                {promptCopied ? "Copied" : "Copy Prompt"}
-              </button>
-              <textarea value={DEVICE_TOTALS_PROMPT} readOnly aria-label="Prompt for AI device totals" />
-            </section>
-
-            <input
-              ref={imageMergeInputRef}
-              type="file"
-              accept="image/*,.png,.jpg,.jpeg,.webp,.gif,.bmp,.avif"
-              multiple
-              onChange={(event) => {
-                if (event.target.files) {
-                  addImageMergeFiles(event.target.files);
-                }
-                event.target.value = "";
-              }}
-            />
-            <button
-              type="button"
-              className="imageDropzone"
-              onClick={() => imageMergeInputRef.current?.click()}
-              onDragOver={(event) => event.preventDefault()}
-              onDrop={(event) => {
-                event.preventDefault();
-                addImageMergeFiles(event.dataTransfer.files);
-              }}
-            >
-              <FolderOpen size={28} />
-              <strong>Drop screenshots here</strong>
-              <span>or click to choose images from Windows Explorer</span>
-            </button>
-
-            {imageMergeError ? <div className="notice">{imageMergeError}</div> : null}
-
-            <div className="imageMergeList">
-              {imageMergeItems.length === 0 ? (
-                <div className="imageMergeEmpty">No screenshots selected.</div>
-              ) : (
-                imageMergeItems.map((item, index) => (
-                  <div className="imageMergeItem" key={item.id}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={item.url} alt="" />
-                    <div>
-                      <strong>{item.name}</strong>
-                      <span>{Math.max(1, Math.round(item.size / 1024))} KB</span>
-                    </div>
-                    <div className="imageMergeItemActions">
-                      <button type="button" onClick={() => moveImageMergeItem(item.id, -1)} disabled={index === 0} aria-label="Move image up">
-                        <MoveUp size={16} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => moveImageMergeItem(item.id, 1)}
-                        disabled={index === imageMergeItems.length - 1}
-                        aria-label="Move image down"
-                      >
-                        <MoveDown size={16} />
-                      </button>
-                      <button type="button" className="dangerIcon" onClick={() => removeImageMergeItem(item.id)} aria-label="Remove image">
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
           </div>
 
           <div className="toolModalFooter">
-            <button type="button" className="secondaryButton" onClick={clearImageMergeItems} disabled={imageMergeItems.length === 0 || mergingImages}>
-              Clear
+            <button
+              type="button"
+              className="secondaryButton"
+              onClick={rejectScreenshotIncome}
+              disabled={loadingEarnAppIncome || applyingScreenshotIncome || screenshotIncomeGroups.length === 0}
+            >
+              <X size={17} />
+              Reject
             </button>
-            <button type="button" className="loadConfig" onClick={() => void exportMergedImage()} disabled={imageMergeItems.length === 0 || mergingImages}>
-              <Download size={17} />
-              {mergingImages ? "Merging..." : "Export PNG"}
+            <button
+              type="button"
+              className="loadConfig"
+              onClick={() => void applyScreenshotIncome()}
+              disabled={
+                loadingEarnAppIncome ||
+                applyingScreenshotIncome ||
+                screenshotIncomeGroups.every((group) => !group.investmentId || !Number.isFinite(Number(group.amount)) || Number(group.amount) <= 0)
+              }
+            >
+              <Check size={17} />
+              {applyingScreenshotIncome ? "Recording..." : "Confirm"}
             </button>
           </div>
         </div>
