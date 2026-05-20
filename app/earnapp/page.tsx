@@ -38,6 +38,8 @@ type PendingDeleteSelection = {
   devices: EarnAppDevice[];
 };
 
+type EarnAppTab = "group" | "devices";
+
 const APP_BASE_PATH = "/verus-monitoring";
 
 function getAppPath(path: string) {
@@ -121,6 +123,7 @@ export default function EarnAppDevicesPage() {
   const [investments, setInvestments] = useState<Investment[]>([]);
   const [checkedAt, setCheckedAt] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [earnAppTab, setEarnAppTab] = useState<EarnAppTab>("group");
   const [loading, setLoading] = useState(false);
   const [deletingUuid, setDeletingUuid] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<PendingDeleteSelection | null>(null);
@@ -425,14 +428,29 @@ export default function EarnAppDevicesPage() {
           </label>
         </div>
 
-        <section className="earnAppSection" aria-label="EarnApp device groups">
-          <div className="sectionHeader">
-            <div>
-              <h2>Groups</h2>
-              <p>{filteredGroups.length} group{filteredGroups.length === 1 ? "" : "s"} from the visible devices.</p>
-            </div>
-          </div>
+        <div className="tabs" role="tablist" aria-label="EarnApp device views">
+          <button
+            className={`tab ${earnAppTab === "group" ? "active" : ""}`}
+            onClick={() => setEarnAppTab("group")}
+            role="tab"
+            aria-selected={earnAppTab === "group"}
+          >
+            <Smartphone size={16} aria-hidden="true" />
+            <span>Group {filteredGroups.length}</span>
+          </button>
+          <button
+            className={`tab ${earnAppTab === "devices" ? "active" : ""}`}
+            onClick={() => setEarnAppTab("devices")}
+            role="tab"
+            aria-selected={earnAppTab === "devices"}
+          >
+            <Smartphone size={16} aria-hidden="true" />
+            <span>All Devices {filteredDevices.length}</span>
+          </button>
+        </div>
 
+        {earnAppTab === "group" ? (
+        <section className="earnAppSection" aria-label="EarnApp device groups">
           {filteredGroups.length === 0 ? (
             <div className="imageMergeEmpty">No groups loaded.</div>
           ) : (
@@ -477,15 +495,9 @@ export default function EarnAppDevicesPage() {
             </div>
           )}
         </section>
+        ) : (
 
         <section className="earnAppSection" aria-label="All EarnApp devices">
-          <div className="sectionHeader">
-            <div>
-              <h2>All Devices</h2>
-              <p>{filteredDevices.length} visible of {devices.length} loaded devices.</p>
-            </div>
-          </div>
-
           <div className="tableWrap earnAppTable">
             <table>
               <thead>
@@ -570,6 +582,7 @@ export default function EarnAppDevicesPage() {
             </table>
           </div>
         </section>
+        )}
       </div>
 
       {pendingDelete ? (
