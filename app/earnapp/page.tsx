@@ -425,130 +425,150 @@ export default function EarnAppDevicesPage() {
           </label>
         </div>
 
-        {filteredGroups.length > 0 ? (
-          <section className="earnAppGroups" aria-label="EarnApp device groups">
-            {filteredGroups.map((group) => (
-              <article className="earnAppGroup" key={group.key}>
-                <div>
-                  <strong>{group.label}</strong>
-                  <span>{group.devices.map((device) => device.title).join(", ")}</span>
-                </div>
-                <dl>
-                  <div>
-                    <dt>Devices</dt>
-                    <dd>{group.devices.length}</dd>
-                  </div>
-                  <div>
-                    <dt>Earned</dt>
-                    <dd>{formatUsd(group.earned)}</dd>
-                  </div>
-                  <div>
-                    <dt>Zero Earned</dt>
-                    <dd>{group.devices.filter((device) => device.earned <= 0).length}</dd>
-                  </div>
-                </dl>
-                <button
-                  type="button"
-                  className="loadConfig dangerButton"
-                  onClick={() =>
-                    openDeleteModal({
-                      key: group.key,
-                      title: group.label,
-                      devices: group.devices,
-                    })
-                  }
-                  disabled={deletingUuid === group.key || group.devices.every((device) => !device.uuid)}
-                >
-                  <Trash2 size={17} />
-                  Group Delete
-                </button>
-              </article>
-            ))}
-          </section>
-        ) : null}
+        <section className="earnAppSection" aria-label="EarnApp device groups">
+          <div className="sectionHeader">
+            <div>
+              <h2>Groups</h2>
+              <p>{filteredGroups.length} group{filteredGroups.length === 1 ? "" : "s"} from the visible devices.</p>
+            </div>
+          </div>
 
-        <section className="tableWrap earnAppTable" aria-label="EarnApp devices">
-          <table>
-            <thead>
-              <tr>
-                <th>Device</th>
-                <th>Status</th>
-                <th>Country</th>
-                <th>Uptime</th>
-                <th>Total Uptime</th>
-                <th>Rate</th>
-                <th>Earned</th>
-                <th>Total</th>
-                <th>IP</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading && devices.length === 0 ? (
-                <tr>
-                  <td className="empty" colSpan={10}>
-                    Loading EarnApp devices...
-                  </td>
-                </tr>
-              ) : filteredDevices.length === 0 ? (
-                <tr>
-                  <td className="empty" colSpan={10}>
-                    {devices.length > 0 ? "No EarnApp devices match your search." : "Paste a cookie and load devices."}
-                  </td>
-                </tr>
-              ) : (
-                filteredDevices.map((device, index) => {
-                  const active = isEarnAppDeviceActive(device);
+          {filteredGroups.length === 0 ? (
+            <div className="imageMergeEmpty">No groups loaded.</div>
+          ) : (
+            <div className="earnAppGroups">
+              {filteredGroups.map((group) => (
+                <article className="earnAppGroup" key={group.key}>
+                  <div>
+                    <strong>{group.label}</strong>
+                    <span>{group.devices.map((device) => device.title).join(", ")}</span>
+                  </div>
+                  <dl>
+                    <div>
+                      <dt>Devices</dt>
+                      <dd>{group.devices.length}</dd>
+                    </div>
+                    <div>
+                      <dt>Earned</dt>
+                      <dd>{formatUsd(group.earned)}</dd>
+                    </div>
+                    <div>
+                      <dt>Zero Earned</dt>
+                      <dd>{group.devices.filter((device) => device.earned <= 0).length}</dd>
+                    </div>
+                  </dl>
+                  <button
+                    type="button"
+                    className="loadConfig dangerButton"
+                    onClick={() =>
+                      openDeleteModal({
+                        key: group.key,
+                        title: group.label,
+                        devices: group.devices,
+                      })
+                    }
+                    disabled={deletingUuid === group.key || group.devices.every((device) => !device.uuid)}
+                  >
+                    <Trash2 size={17} />
+                    Group Delete
+                  </button>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
 
-                  return (
-                    <tr key={device.uuid || `${device.title}-${index}`}>
-                      <td>
-                        <div className="deviceName">
-                          <strong>{device.title}</strong>
-                          <span>
-                            <Smartphone size={13} aria-hidden="true" /> {device.uuid}
+        <section className="earnAppSection" aria-label="All EarnApp devices">
+          <div className="sectionHeader">
+            <div>
+              <h2>All Devices</h2>
+              <p>{filteredDevices.length} visible of {devices.length} loaded devices.</p>
+            </div>
+          </div>
+
+          <div className="tableWrap earnAppTable">
+            <table>
+              <thead>
+                <tr>
+                  <th>Device</th>
+                  <th>Status</th>
+                  <th>Country</th>
+                  <th>Uptime</th>
+                  <th>Total Uptime</th>
+                  <th>Rate</th>
+                  <th>Earned</th>
+                  <th>Total</th>
+                  <th>IP</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading && devices.length === 0 ? (
+                  <tr>
+                    <td className="empty" colSpan={10}>
+                      Loading EarnApp devices...
+                    </td>
+                  </tr>
+                ) : filteredDevices.length === 0 ? (
+                  <tr>
+                    <td className="empty" colSpan={10}>
+                      {devices.length > 0 ? "No EarnApp devices match your search." : "Paste a cookie and load devices."}
+                    </td>
+                  </tr>
+                ) : (
+                  filteredDevices.map((device, index) => {
+                    const active = isEarnAppDeviceActive(device);
+
+                    return (
+                      <tr key={device.uuid || `${device.title}-${index}`}>
+                        <td>
+                          <div className="deviceName">
+                            <strong>{device.title}</strong>
+                            <span>
+                              <Smartphone size={13} aria-hidden="true" /> {device.uuid}
+                            </span>
+                          </div>
+                        </td>
+                        <td>
+                          <span className={`status ${active ? "online" : "offline"}`}>
+                            <span className="dot" aria-hidden="true" />
+                            {active ? "Active" : "Offline"}
                           </span>
-                        </div>
-                      </td>
-                      <td>
-                        <span className={`status ${active ? "online" : "offline"}`}>
-                          <span className="dot" aria-hidden="true" />
-                          {active ? "Active" : "Offline"}
-                        </span>
-                      </td>
-                      <td>{device.country.toUpperCase() || "-"}</td>
-                      <td className="mono">{formatUptime(device.uptime)}</td>
-                      <td className="mono">{formatUptime(device.total_uptime)}</td>
-                      <td className="mono">${device.rate}</td>
-                      <td className="mono">{formatUsd(device.earned)}</td>
-                      <td className="mono">{formatUsd(device.earned_total)}</td>
-                      <td className="mono" title={device.ips.join(", ")}>
-                        {device.ips[0] ?? "-"}
-                      </td>
-                      <td>
-                        <button
-                          type="button"
-                          className="dangerIcon"
-                          onClick={() =>
-                            openDeleteModal({
-                              key: getDeviceIncomeKey(device.title) || device.title || device.uuid,
-                              title: device.title || device.uuid,
-                              devices: [device],
-                            })
-                          }
-                          disabled={deletingUuid === device.uuid || !device.uuid}
-                          aria-label={`Delete ${device.title}`}
-                          title="Delete EarnApp device"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
+                        </td>
+                        <td>{device.country.toUpperCase() || "-"}</td>
+                        <td className="mono">{formatUptime(device.uptime)}</td>
+                        <td className="mono">{formatUptime(device.total_uptime)}</td>
+                        <td className="mono">${device.rate}</td>
+                        <td className="mono">{formatUsd(device.earned)}</td>
+                        <td className="mono">{formatUsd(device.earned_total)}</td>
+                        <td className="mono" title={device.ips.join(", ")}>
+                          {device.ips[0] ?? "-"}
+                        </td>
+                        <td>
+                          <button
+                            type="button"
+                            className="dangerIcon"
+                            onClick={() =>
+                              openDeleteModal({
+                                key: getDeviceIncomeKey(device.title) || device.title || device.uuid,
+                                title: device.title || device.uuid,
+                                devices: [device],
+                              })
+                            }
+                            disabled={deletingUuid === device.uuid || !device.uuid}
+                            aria-label={`Delete ${device.title}`}
+                            title="Delete EarnApp device"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
         </section>
       </div>
 

@@ -351,6 +351,18 @@ select {
   overflow-y: visible;
 }
 
+.earnAppSection {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  border-radius: 8px;
+  padding: 14px;
+  margin-bottom: 14px;
+}
+
+.earnAppSection .sectionHeader {
+  margin-bottom: 12px;
+}
+
 .earnAppDeleteDialog {
   width: min(620px, 100%);
 }
