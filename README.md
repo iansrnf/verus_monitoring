@@ -13,7 +13,7 @@ CONFIG_API_TOKEN=optional-shared-token-for-mobile-api
 EARNAPP_VERSION=1.633.653
 ```
 
-Paste your EarnApp dashboard cookie into the EarnApp tool in the browser. Do not commit real cookie, OAuth, or refresh-token values.
+Paste your EarnApp dashboard cookie header or exported cookies JSON into the EarnApp tool in the browser. Do not commit real cookie, OAuth, or refresh-token values.
 
 Optional Fail2Ban monitor settings for Ubuntu:
 

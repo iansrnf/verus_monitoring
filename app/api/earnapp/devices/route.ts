@@ -17,6 +17,12 @@ type EarnAppDevicesRequest = {
   cookie?: unknown;
 };
 
+type BrowserCookieExport = {
+  name?: unknown;
+  value?: unknown;
+  domain?: unknown;
+};
+
 const EARNAPP_DEVICES_URL = "https://earnapp.com/dashboard/api/devices";
 
 function getEnvValue(name: string) {
@@ -27,6 +33,39 @@ function getXsrfToken(cookie: string) {
   const match = cookie.match(/(?:^|;\s*)xsrf-token=([^;]+)/);
 
   return match?.[1] ? decodeURIComponent(match[1]) : "";
+}
+
+function getCookieHeader(value: unknown) {
+  if (typeof value !== "string") {
+    return "";
+  }
+
+  const cookieText = value.trim();
+
+  if (!cookieText) {
+    return "";
+  }
+
+  if (!cookieText.startsWith("[") && !cookieText.startsWith("{")) {
+    return cookieText.replace(/^cookie:\s*/i, "").trim();
+  }
+
+  try {
+    const parsedCookie = JSON.parse(cookieText) as unknown;
+    const cookies = Array.isArray(parsedCookie) ? parsedCookie : Object.values(parsedCookie as Record<string, unknown>);
+
+    return cookies
+      .map((cookie): BrowserCookieExport | null => (cookie && typeof cookie === "object" ? (cookie as BrowserCookieExport) : null))
+      .filter((cookie): cookie is BrowserCookieExport => {
+        const domain = typeof cookie?.domain === "string" ? cookie.domain : "";
+
+        return typeof cookie?.name === "string" && typeof cookie?.value === "string" && (!domain || domain.includes("earnapp.com"));
+      })
+      .map((cookie) => `${cookie.name}=${cookie.value}`)
+      .join("; ");
+  } catch {
+    return "";
+  }
 }
 
 function toNumber(value: unknown) {
@@ -52,11 +91,11 @@ function normalizeEarnAppDevice(device: EarnAppDevice) {
 
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as EarnAppDevicesRequest;
-  const cookie = typeof body.cookie === "string" ? body.cookie.trim() : "";
+  const cookie = getCookieHeader(body.cookie);
 
   if (!cookie) {
     return NextResponse.json(
-      { error: "Paste your EarnApp dashboard cookie before loading devices." },
+      { error: "Paste your EarnApp cookie header or exported cookies JSON before loading devices." },
       { status: 400 },
     );
   }

@@ -931,11 +931,11 @@ export default function Home() {
               </div>
 
               <label className="earnAppCookieField">
-                <span>Cookie</span>
+                <span>Cookie or JSON export</span>
                 <textarea
                   value={earnAppCookie}
                   onChange={(event) => setEarnAppCookie(event.target.value)}
-                  placeholder="Paste the full Cookie header from EarnApp"
+                  placeholder="Paste the full Cookie header, or the exported cookies.json array"
                   spellCheck={false}
                   aria-label="EarnApp cookie"
                 />
