@@ -502,6 +502,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [savingConfig, setSavingConfig] = useState(false);
   const [serverConfig, setServerConfig] = useState<ServerConfig | null>(null);
+  const [earnAppCookie, setEarnAppCookie] = useState("");
   const [earnAppDevices, setEarnAppDevices] = useState<EarnAppDevice[]>([]);
   const [earnAppLoading, setEarnAppLoading] = useState(false);
   const [earnAppCheckedAt, setEarnAppCheckedAt] = useState<string | null>(null);
@@ -540,11 +541,25 @@ export default function Home() {
   }, []);
 
   const loadEarnAppDevices = useCallback(async () => {
+    const cookie = earnAppCookie.trim();
+
+    if (!cookie) {
+      setEarnAppError("Paste your EarnApp dashboard cookie first.");
+      return;
+    }
+
     setEarnAppLoading(true);
     setEarnAppError(null);
 
     try {
-      const response = await fetch(getAppPath("/api/earnapp/devices"), { cache: "no-store" });
+      const response = await fetch(getAppPath("/api/earnapp/devices"), {
+        method: "POST",
+        cache: "no-store",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ cookie }),
+      });
       const result = (await response.json()) as { checkedAt?: string; devices?: EarnAppDevice[]; error?: string };
 
       if (!response.ok) {
@@ -558,7 +573,7 @@ export default function Home() {
     }
 
     setEarnAppLoading(false);
-  }, []);
+  }, [earnAppCookie]);
 
   async function loadSelectedConfig() {
     const selectedConfig = miningConfigs[Number(selectedConfigIndex)];
@@ -650,8 +665,7 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadDevices(false);
     void loadServerConfig();
-    void loadEarnAppDevices();
-  }, [loadDevices, loadEarnAppDevices, loadServerConfig]);
+  }, [loadDevices, loadServerConfig]);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -910,11 +924,22 @@ export default function Home() {
                   <span>EarnApp Devices</span>
                   <strong>Dashboard API status</strong>
                 </div>
-                <button className="loadConfig" type="button" onClick={() => void loadEarnAppDevices()} disabled={earnAppLoading}>
+                <button className="loadConfig" type="button" onClick={() => void loadEarnAppDevices()} disabled={earnAppLoading || !earnAppCookie.trim()}>
                   <RefreshCw size={17} />
                   {earnAppLoading ? "Loading..." : "Refresh EarnApp"}
                 </button>
               </div>
+
+              <label className="earnAppCookieField">
+                <span>Cookie</span>
+                <textarea
+                  value={earnAppCookie}
+                  onChange={(event) => setEarnAppCookie(event.target.value)}
+                  placeholder="Paste the full Cookie header from EarnApp"
+                  spellCheck={false}
+                  aria-label="EarnApp cookie"
+                />
+              </label>
 
               <div className="earnAppMetrics">
                 <div>

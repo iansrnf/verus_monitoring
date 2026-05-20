@@ -13,6 +13,10 @@ type EarnAppDevice = {
   total_uptime?: unknown;
 };
 
+type EarnAppDevicesRequest = {
+  cookie?: unknown;
+};
+
 const EARNAPP_DEVICES_URL = "https://earnapp.com/dashboard/api/devices";
 
 function getEnvValue(name: string) {
@@ -46,17 +50,18 @@ function normalizeEarnAppDevice(device: EarnAppDevice) {
   };
 }
 
-export async function GET() {
-  const cookie = getEnvValue("EARNAPP_COOKIE");
+export async function POST(request: Request) {
+  const body = (await request.json().catch(() => ({}))) as EarnAppDevicesRequest;
+  const cookie = typeof body.cookie === "string" ? body.cookie.trim() : "";
 
   if (!cookie) {
     return NextResponse.json(
-      { error: "Missing EARNAPP_COOKIE on the server. Add your EarnApp dashboard cookie to .env.local." },
-      { status: 500 },
+      { error: "Paste your EarnApp dashboard cookie before loading devices." },
+      { status: 400 },
     );
   }
 
-  const xsrfToken = getEnvValue("EARNAPP_XSRF_TOKEN") || getXsrfToken(cookie);
+  const xsrfToken = getXsrfToken(cookie);
   const appId = getEnvValue("EARNAPP_APP_ID") || "earnapp";
   const version = getEnvValue("EARNAPP_VERSION") || "1.633.653";
   const url = new URL(EARNAPP_DEVICES_URL);

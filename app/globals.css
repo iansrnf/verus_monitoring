@@ -219,6 +219,35 @@ select {
   margin-top: 4px;
 }
 
+.earnAppCookieField {
+  display: grid;
+  gap: 7px;
+}
+
+.earnAppCookieField span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.earnAppCookieField textarea {
+  width: 100%;
+  min-height: 74px;
+  border: 1px solid var(--line);
+  outline: 0;
+  background: #141619;
+  color: var(--text);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font: inherit;
+  resize: vertical;
+}
+
+.earnAppCookieField textarea:focus {
+  border-color: var(--accent);
+}
+
 .earnAppMetrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

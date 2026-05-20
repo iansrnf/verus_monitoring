@@ -10,12 +10,10 @@ Create `.env.local`:
 DATABASE_URL=postgres://postgres:password@localhost:5432/verus_monitoring
 POSTGRES_SSL=false
 CONFIG_API_TOKEN=optional-shared-token-for-mobile-api
-EARNAPP_COOKIE=your-earnapp-dashboard-cookie
-EARNAPP_XSRF_TOKEN=optional-xsrf-token-if-not-present-in-cookie
 EARNAPP_VERSION=1.633.653
 ```
 
-`EARNAPP_COOKIE` is used only by the server-side `/api/earnapp/devices` route. Do not commit real cookie, OAuth, or refresh-token values.
+Paste your EarnApp dashboard cookie into the EarnApp tool in the browser. Do not commit real cookie, OAuth, or refresh-token values.
 
 Optional Fail2Ban monitor settings for Ubuntu:
 
