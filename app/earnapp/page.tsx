@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { ArrowLeft, RefreshCw, Search, Smartphone, X } from "lucide-react";
+import { ArrowLeft, RefreshCw, Search, Smartphone, Trash2, X } from "lucide-react";
 import { LogoutButton } from "@/app/components/LogoutButton";
 
 type EarnAppDevice = {
@@ -81,6 +81,7 @@ export default function EarnAppDevicesPage() {
   const [checkedAt, setCheckedAt] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
+  const [deletingUuid, setDeletingUuid] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function loadEarnAppDevices() {
@@ -113,6 +114,48 @@ export default function EarnAppDevicesPage() {
       setError(loadError instanceof Error ? loadError.message : "Failed to load EarnApp devices.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function deleteEarnAppDevice(device: EarnAppDevice) {
+    const pastedCookie = cookie.trim();
+    const uuid = device.uuid.trim();
+
+    if (!pastedCookie) {
+      setError("Paste your EarnApp cookie header or cookies.json export first.");
+      return;
+    }
+
+    if (!uuid) {
+      setError("This EarnApp device has no UUID to delete.");
+      return;
+    }
+
+    if (!window.confirm(`Delete ${device.title || uuid} from EarnApp?`)) {
+      return;
+    }
+
+    setDeletingUuid(uuid);
+    setError(null);
+
+    try {
+      const response = await fetch(getAppPath(`/api/earnapp/device/${encodeURIComponent(uuid)}`), {
+        method: "DELETE",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cookie: pastedCookie }),
+      });
+      const result = (await response.json()) as { error?: string };
+
+      if (!response.ok) {
+        throw new Error(result.error ?? "Failed to delete EarnApp device.");
+      }
+
+      setDevices((currentDevices) => currentDevices.filter((currentDevice) => currentDevice.uuid !== uuid));
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "Failed to delete EarnApp device.");
+    } finally {
+      setDeletingUuid(null);
     }
   }
 
@@ -250,18 +293,19 @@ export default function EarnAppDevicesPage() {
                 <th>Earned</th>
                 <th>Total</th>
                 <th>IP</th>
+                <th>Action</th>
               </tr>
             </thead>
             <tbody>
               {loading && devices.length === 0 ? (
                 <tr>
-                  <td className="empty" colSpan={9}>
+                  <td className="empty" colSpan={10}>
                     Loading EarnApp devices...
                   </td>
                 </tr>
               ) : filteredDevices.length === 0 ? (
                 <tr>
-                  <td className="empty" colSpan={9}>
+                  <td className="empty" colSpan={10}>
                     {devices.length > 0 ? "No EarnApp devices match your search." : "Paste a cookie and load devices."}
                   </td>
                 </tr>
@@ -293,6 +337,18 @@ export default function EarnAppDevicesPage() {
                       <td className="mono">{formatUsd(device.earned_total)}</td>
                       <td className="mono" title={device.ips.join(", ")}>
                         {device.ips[0] ?? "-"}
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          className="dangerIcon"
+                          onClick={() => void deleteEarnAppDevice(device)}
+                          disabled={deletingUuid === device.uuid || !device.uuid}
+                          aria-label={`Delete ${device.title}`}
+                          title="Delete EarnApp device"
+                        >
+                          <Trash2 size={16} />
+                        </button>
                       </td>
                     </tr>
                   );

@@ -1,0 +1,126 @@
+import { NextResponse } from "next/server";
+
+type RouteContext = {
+  params: Promise<{
+    uuid: string;
+  }>;
+};
+
+type EarnAppDeviceRequest = {
+  cookie?: unknown;
+};
+
+type BrowserCookieExport = {
+  name?: unknown;
+  value?: unknown;
+  domain?: unknown;
+};
+
+const EARNAPP_DEVICE_URL = "https://earnapp.com/dashboard/api/device";
+
+function getEnvValue(name: string) {
+  return process.env[name]?.trim() || "";
+}
+
+function getXsrfToken(cookie: string) {
+  const match = cookie.match(/(?:^|;\s*)xsrf-token=([^;]+)/);
+
+  return match?.[1] ? decodeURIComponent(match[1]) : "";
+}
+
+function getCookieHeader(value: unknown) {
+  if (typeof value !== "string") {
+    return "";
+  }
+
+  const cookieText = value.trim();
+
+  if (!cookieText) {
+    return "";
+  }
+
+  if (!cookieText.startsWith("[") && !cookieText.startsWith("{")) {
+    return cookieText.replace(/^cookie:\s*/i, "").trim();
+  }
+
+  try {
+    const parsedCookie = JSON.parse(cookieText) as unknown;
+    const cookies = Array.isArray(parsedCookie) ? parsedCookie : Object.values(parsedCookie as Record<string, unknown>);
+
+    return cookies
+      .map((cookie): BrowserCookieExport | null => (cookie && typeof cookie === "object" ? (cookie as BrowserCookieExport) : null))
+      .filter((cookie): cookie is BrowserCookieExport => {
+        const domain = typeof cookie?.domain === "string" ? cookie.domain : "";
+
+        return typeof cookie?.name === "string" && typeof cookie?.value === "string" && (!domain || domain.includes("earnapp.com"));
+      })
+      .map((cookie) => `${cookie.name}=${cookie.value}`)
+      .join("; ");
+  } catch {
+    return "";
+  }
+}
+
+export async function DELETE(request: Request, context: RouteContext) {
+  const { uuid } = await context.params;
+  const body = (await request.json().catch(() => ({}))) as EarnAppDeviceRequest;
+  const cookie = getCookieHeader(body.cookie);
+
+  if (!uuid.trim()) {
+    return NextResponse.json({ error: "Missing EarnApp device UUID." }, { status: 400 });
+  }
+
+  if (!cookie) {
+    return NextResponse.json(
+      { error: "Paste your EarnApp cookie header or exported cookies JSON before deleting a device." },
+      { status: 400 },
+    );
+  }
+
+  const xsrfToken = getXsrfToken(cookie);
+  const appId = getEnvValue("EARNAPP_APP_ID") || "earnapp";
+  const version = getEnvValue("EARNAPP_VERSION") || "1.633.653";
+  const url = new URL(`${EARNAPP_DEVICE_URL}/${encodeURIComponent(uuid)}`);
+
+  url.searchParams.set("appid", appId);
+  url.searchParams.set("version", version);
+
+  try {
+    const response = await fetch(url, {
+      method: "DELETE",
+      cache: "no-store",
+      headers: {
+        accept: "application/json, text/javascript, */*; q=0.01",
+        cookie,
+        origin: "https://earnapp.com",
+        referer: "https://earnapp.com/dashboard/me/passive-income",
+        "user-agent": getEnvValue("EARNAPP_USER_AGENT") || "Mozilla/5.0",
+        "x-requested-with": "XMLHttpRequest",
+        ...(xsrfToken ? { "xsrf-token": xsrfToken } : {}),
+      },
+    });
+    const text = await response.text();
+    let data: unknown = null;
+
+    if (text) {
+      try {
+        data = JSON.parse(text) as unknown;
+      } catch {
+        data = text;
+      }
+    }
+
+    if (!response.ok) {
+      return NextResponse.json(
+        { error: `EarnApp returned ${response.status}: ${text.slice(0, 240) || response.statusText}` },
+        { status: response.status },
+      );
+    }
+
+    return NextResponse.json({ ok: true, response: data });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to delete EarnApp device.";
+
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
