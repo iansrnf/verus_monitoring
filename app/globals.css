@@ -281,6 +281,7 @@ select {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 10px;
+  margin-bottom: 14px;
 }
 
 .earnAppGroup {
@@ -331,6 +332,10 @@ select {
   font-weight: 800;
 }
 
+.earnAppGroup .loadConfig {
+  width: 100%;
+}
+
 .earnAppTable {
   max-height: 460px;
   overflow: auto;
@@ -355,6 +360,21 @@ select {
   gap: 12px;
   padding: 14px;
   overflow: auto;
+}
+
+.earnAppDeleteDeviceList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.earnAppDeleteDeviceList span {
+  border: 1px solid var(--line);
+  background: #141619;
+  border-radius: 8px;
+  padding: 7px 9px;
+  color: #d6dbe2;
+  font-size: 12px;
 }
 
 .earnAppTargetField {
