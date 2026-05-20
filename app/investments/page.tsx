@@ -10,6 +10,7 @@ import {
   Download,
   FileUp,
   FolderOpen,
+  History,
   Images,
   LineChart,
   Clipboard,
@@ -45,6 +46,15 @@ type Investment = {
   total_income: number;
   income_count: number;
   incomes: Income[];
+};
+
+type InvestmentAuditLog = {
+  id: number;
+  action: string;
+  entity_type: string;
+  entity_id: number | null;
+  summary: string;
+  created_at: string | null;
 };
 
 type ImportMode = "native" | "legacy";
@@ -169,6 +179,7 @@ function getExportFileName() {
 
 export default function InvestmentsPage() {
   const [investments, setInvestments] = useState<Investment[]>([]);
+  const [auditLogs, setAuditLogs] = useState<InvestmentAuditLog[]>([]);
   const [selectedInvestmentId, setSelectedInvestmentId] = useState<number | null>(null);
   const [investmentName, setInvestmentName] = useState("");
   const [investmentCost, setInvestmentCost] = useState("");
@@ -208,6 +219,18 @@ export default function InvestmentsPage() {
   const imageMergeItemsRef = useRef<ImageMergeItem[]>([]);
   const importModeRef = useRef<ImportMode>("native");
 
+  const loadAuditLogs = useCallback(async () => {
+    const response = await fetch(getAppPath("/api/investments/audit"), { cache: "no-store" });
+    const result = (await response.json()) as { auditLogs?: InvestmentAuditLog[]; error?: string };
+
+    if (!response.ok) {
+      setError(result.error ?? "Failed to load investment audit logs.");
+      return;
+    }
+
+    setAuditLogs(result.auditLogs ?? []);
+  }, []);
+
   const loadInvestments = useCallback(async (showLoading = true) => {
     if (showLoading) {
       setLoading(true);
@@ -233,7 +256,8 @@ export default function InvestmentsPage() {
     // The database is the external source of truth for this page.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadInvestments();
-  }, [loadInvestments]);
+    void loadAuditLogs();
+  }, [loadAuditLogs, loadInvestments]);
 
   useEffect(() => {
     imageMergeItemsRef.current = imageMergeItems;
@@ -406,7 +430,7 @@ export default function InvestmentsPage() {
       setInvestmentName("");
       setInvestmentCost("");
       setInvestmentDescription("");
-      await loadInvestments(false);
+      await Promise.all([loadInvestments(false), loadAuditLogs()]);
       setSelectedInvestmentId(result.investment?.id ?? null);
       setShowInvestmentForm(false);
       setMobileView("detail");
@@ -440,7 +464,7 @@ export default function InvestmentsPage() {
     } else {
       setIncomeAmount("");
       setIncomeDescription("");
-      await loadInvestments(false);
+      await Promise.all([loadInvestments(false), loadAuditLogs()]);
     }
 
     setSavingIncome(false);
@@ -457,7 +481,7 @@ export default function InvestmentsPage() {
 
     setSelectedInvestmentId(null);
     setMobileView("list");
-    await loadInvestments(false);
+    await Promise.all([loadInvestments(false), loadAuditLogs()]);
   }
 
   async function deleteIncome(incomeId: number) {
@@ -469,7 +493,7 @@ export default function InvestmentsPage() {
       return;
     }
 
-    await loadInvestments(false);
+    await Promise.all([loadInvestments(false), loadAuditLogs()]);
   }
 
   function beginEditInvestment(investment: Investment) {
@@ -512,7 +536,7 @@ export default function InvestmentsPage() {
       setError(result.error ?? "Failed to update investment.");
     } else {
       cancelEditInvestment();
-      await loadInvestments(false);
+      await Promise.all([loadInvestments(false), loadAuditLogs()]);
     }
 
     setSavingInvestmentEdit(false);
@@ -551,7 +575,7 @@ export default function InvestmentsPage() {
       setError(result.error ?? "Failed to update income.");
     } else {
       cancelEditIncome();
-      await loadInvestments(false);
+      await Promise.all([loadInvestments(false), loadAuditLogs()]);
     }
 
     setSavingIncomeEditId(null);
@@ -592,7 +616,7 @@ export default function InvestmentsPage() {
         return;
       }
 
-      await loadInvestments(false);
+      await Promise.all([loadInvestments(false), loadAuditLogs()]);
       setError(`Imported ${result.imported?.investments ?? 0} investments and ${result.imported?.incomes ?? 0} income records.`);
     } catch (importError) {
       setError(importError instanceof Error ? importError.message : "Failed to read import file.");
@@ -942,6 +966,37 @@ export default function InvestmentsPage() {
               </div>
             </div>
           )}
+        </section>
+
+        <section className="auditTrail" aria-label="Investment audit logs">
+          <div className="auditTrailHeader">
+            <div>
+              <span>Audit Logs</span>
+              <strong>Recent Activity</strong>
+            </div>
+            <button type="button" onClick={() => void loadAuditLogs()} aria-label="Refresh audit logs" title="Refresh audit logs">
+              <RefreshCw size={17} />
+            </button>
+          </div>
+
+          <div className="auditTrailList">
+            {auditLogs.length === 0 ? (
+              <div className="empty">No investment activity recorded yet.</div>
+            ) : (
+              auditLogs.slice(0, 8).map((log) => (
+                <div className="auditTrailItem" key={log.id}>
+                  <History size={16} />
+                  <div>
+                    <strong>{log.summary}</strong>
+                    <span>
+                      {log.action} {log.entity_type}
+                      {log.entity_id ? ` #${log.entity_id}` : ""} - {formatDate(log.created_at)}
+                    </span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </section>
 
         <div className="investmentMobileTabs" role="tablist" aria-label="Investment views">

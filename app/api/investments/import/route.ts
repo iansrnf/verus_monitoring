@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { recordInvestmentAuditLog } from "@/lib/investment-audit";
 import { getIncomeInvestmentColumn } from "@/lib/investments-schema";
 import { postgresPool } from "@/lib/postgres";
 
@@ -152,6 +153,17 @@ export async function POST(request: Request) {
         incomeCount += 1;
       }
     }
+
+    await recordInvestmentAuditLog(client, {
+      action: "imported",
+      entityType: "import",
+      summary: `Imported ${investments.length} investments and ${incomeCount} income records.`,
+      after: {
+        investments: investments.length,
+        incomes: incomeCount,
+        mode,
+      },
+    });
 
     await client.query("commit");
 

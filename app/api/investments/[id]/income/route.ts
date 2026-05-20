@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { recordInvestmentAuditLog } from "@/lib/investment-audit";
 import { getIncomeInvestmentColumn } from "@/lib/investments-schema";
 import { postgresPool } from "@/lib/postgres";
 
@@ -54,7 +55,7 @@ export async function POST(request: Request, context: RouteContext) {
   }
 
   try {
-    const existingInvestment = await postgresPool.query("select id from investments where id = $1", [investmentId]);
+    const existingInvestment = await postgresPool.query("select id, name from investments where id = $1", [investmentId]);
 
     if (existingInvestment.rowCount === 0) {
       return NextResponse.json({ error: "Investment not found." }, { status: 404 });
@@ -69,8 +70,17 @@ export async function POST(request: Request, context: RouteContext) {
       `,
       [investmentId, amount, description],
     );
+    const income = rows[0];
 
-    return NextResponse.json({ income: rows[0] }, { status: 201 });
+    await recordInvestmentAuditLog(postgresPool, {
+      action: "created",
+      entityType: "income",
+      entityId: income.id,
+      summary: `Added income ${income.amount} to "${existingInvestment.rows[0].name ?? `#${investmentId}`}".`,
+      after: income,
+    });
+
+    return NextResponse.json({ income }, { status: 201 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to create income.";
 

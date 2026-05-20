@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { recordInvestmentAuditLog } from "@/lib/investment-audit";
 import { getIncomeInvestmentColumn } from "@/lib/investments-schema";
 import { postgresPool } from "@/lib/postgres";
 
@@ -60,6 +61,10 @@ export async function PATCH(request: Request, context: RouteContext) {
   }
 
   try {
+    const { rows: beforeRows } = await postgresPool.query(
+      "select id, name, cost, description, created_at::text as created_at from investments where id = $1",
+      [id],
+    );
     const { rows, rowCount } = await postgresPool.query(
       `
         update investments
@@ -74,7 +79,18 @@ export async function PATCH(request: Request, context: RouteContext) {
       return NextResponse.json({ error: "Investment not found." }, { status: 404 });
     }
 
-    return NextResponse.json({ investment: rows[0] });
+    const investment = rows[0];
+
+    await recordInvestmentAuditLog(postgresPool, {
+      action: "updated",
+      entityType: "investment",
+      entityId: investment.id,
+      summary: `Updated investment "${investment.name}".`,
+      before: beforeRows[0] ?? null,
+      after: investment,
+    });
+
+    return NextResponse.json({ investment });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to update investment.";
 
@@ -96,6 +112,18 @@ export async function DELETE(_request: Request, context: RouteContext) {
 
   try {
     const incomeInvestmentColumn = await getIncomeInvestmentColumn(postgresPool);
+    const { rows: investmentRows } = await postgresPool.query(
+      "select id, name, cost, description, created_at::text as created_at from investments where id = $1",
+      [id],
+    );
+    const { rows: incomeRows } = await postgresPool.query(
+      `
+        select id, ${incomeInvestmentColumn} as inv_id, amount, description, created_at::text as created_at
+        from income
+        where ${incomeInvestmentColumn} = $1
+      `,
+      [id],
+    );
 
     await postgresPool.query(`delete from income where ${incomeInvestmentColumn} = $1`, [id]);
     const result = await postgresPool.query("delete from investments where id = $1", [id]);
@@ -103,6 +131,19 @@ export async function DELETE(_request: Request, context: RouteContext) {
     if (result.rowCount === 0) {
       return NextResponse.json({ error: "Investment not found." }, { status: 404 });
     }
+
+    const investment = investmentRows[0];
+
+    await recordInvestmentAuditLog(postgresPool, {
+      action: "deleted",
+      entityType: "investment",
+      entityId: id,
+      summary: `Deleted investment "${investment?.name ?? `#${id}`}" and ${incomeRows.length} income record${incomeRows.length === 1 ? "" : "s"}.`,
+      before: {
+        investment: investment ?? null,
+        incomes: incomeRows,
+      },
+    });
 
     return NextResponse.json({ ok: true });
   } catch (error) {

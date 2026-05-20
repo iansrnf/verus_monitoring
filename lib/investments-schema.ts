@@ -39,6 +39,19 @@ export async function ensureInvestmentSchema(pool: Pool) {
   if (!rows[0]?.column_name) {
     await pool.query("alter table income add column inv_id integer references investments(id) on delete cascade");
   }
+
+  await pool.query(`
+    create table if not exists investment_audit_logs (
+      id integer generated always as identity primary key,
+      action text not null,
+      entity_type text not null,
+      entity_id integer,
+      summary text not null,
+      before_data jsonb,
+      after_data jsonb,
+      created_at timestamptz not null default now()
+    )
+  `);
 }
 
 export async function getIncomeInvestmentColumn(pool: Pool): Promise<IncomeInvestmentColumn> {
