@@ -1687,6 +1687,10 @@ export default function InvestmentsPage() {
                         />
                       </label>
                       <label>
+                        <span>Count</span>
+                        <input value={group.deviceNames.length} readOnly aria-label="Captured device count" />
+                      </label>
+                      <label>
                         <span>Expenditure</span>
                         <select
                           value={group.investmentId ?? ""}

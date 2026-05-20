@@ -1271,7 +1271,7 @@ tr:last-child td {
 
 .screenshotIncomeItem {
   display: grid;
-  grid-template-columns: minmax(110px, 0.8fr) minmax(90px, 0.6fr) minmax(140px, 1fr) minmax(160px, 1.2fr) auto;
+  grid-template-columns: minmax(110px, 0.8fr) minmax(90px, 0.55fr) minmax(64px, 0.35fr) minmax(140px, 1fr) minmax(160px, 1.2fr) auto;
   align-items: end;
   gap: 10px;
   border: 1px solid var(--line);
