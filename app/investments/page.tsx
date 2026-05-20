@@ -79,6 +79,32 @@ type ScreenshotIncomeGroup = {
   investmentId: number | null;
 };
 
+type TesseractLoggerMessage = {
+  progress: number;
+  status: string;
+};
+
+type TesseractBrowserApi = {
+  recognize: (
+    image: File,
+    langs?: string,
+    options?: {
+      logger?: (message: TesseractLoggerMessage) => void;
+    },
+  ) => Promise<{
+    data: {
+      text: string;
+    };
+  }>;
+};
+
+declare global {
+  interface Window {
+    Tesseract?: TesseractBrowserApi;
+    tesseractLoader?: Promise<TesseractBrowserApi>;
+  }
+}
+
 type ChartPoint = {
   id: string;
   kind: "income" | "expenditure";
@@ -92,6 +118,7 @@ const USD_TO_PHP = 61.458;
 const MAX_MERGED_IMAGE_WIDTH = 2400;
 const MAX_MERGED_IMAGE_HEIGHT = 30000;
 const IMAGE_FILE_EXTENSION_PATTERN = /\.(avif|bmp|gif|jpe?g|png|webp)$/i;
+const TESSERACT_SCRIPT_URL = "https://cdn.jsdelivr.net/npm/tesseract.js@7/dist/tesseract.min.js";
 const DEVICE_TOTALS_PROMPT = `Analyze the stitched screenshot image I attach.
 
 The image contains one or more Devices tables. Each row has columns similar to:
@@ -154,6 +181,36 @@ function createLocalId(prefix: string) {
 
 function isImageFile(file: File) {
   return file.type.startsWith("image/") || IMAGE_FILE_EXTENSION_PATTERN.test(file.name);
+}
+
+function loadTesseract() {
+  if (typeof window === "undefined") {
+    return Promise.reject(new Error("OCR is only available in the browser."));
+  }
+
+  if (window.Tesseract) {
+    return Promise.resolve(window.Tesseract);
+  }
+
+  window.tesseractLoader ??= new Promise<TesseractBrowserApi>((resolve, reject) => {
+    const script = document.createElement("script");
+
+    script.async = true;
+    script.crossOrigin = "anonymous";
+    script.src = TESSERACT_SCRIPT_URL;
+    script.onload = () => {
+      if (window.Tesseract) {
+        resolve(window.Tesseract);
+        return;
+      }
+
+      reject(new Error("OCR engine loaded, but Tesseract was not available."));
+    };
+    script.onerror = () => reject(new Error("Failed to load the OCR engine. Check the server/browser internet access."));
+    document.head.appendChild(script);
+  });
+
+  return window.tesseractLoader;
 }
 
 function getDeviceIncomeKey(value: string) {
@@ -735,7 +792,7 @@ export default function InvestmentsPage() {
     setScreenshotIncomeProgress(0);
 
     try {
-      const tesseract = await import("tesseract.js");
+      const tesseract = await loadTesseract();
       const result = await tesseract.recognize(file, "eng", {
         logger: (message) => {
           setScreenshotIncomeStatus(message.status);
