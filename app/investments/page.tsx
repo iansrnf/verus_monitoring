@@ -119,6 +119,7 @@ const MAX_MERGED_IMAGE_WIDTH = 2400;
 const MAX_MERGED_IMAGE_HEIGHT = 30000;
 const IMAGE_FILE_EXTENSION_PATTERN = /\.(avif|bmp|gif|jpe?g|png|webp)$/i;
 const TESSERACT_SCRIPT_URL = "https://cdn.jsdelivr.net/npm/tesseract.js@7/dist/tesseract.min.js";
+const MAX_DEVICE_ROW_AMOUNT = 1;
 const DEVICE_TOTALS_PROMPT = `Analyze the stitched screenshot image I attach.
 
 The image contains one or more Devices tables. Each row has columns similar to:
@@ -221,6 +222,19 @@ function getDeviceIncomeKey(value: string) {
     .replace(/\d+$/g, "");
 }
 
+function getDeviceRowAmount(row: string) {
+  const candidates = [...row.matchAll(/(?:[$S]\s*)?((?:[0oO])?[.,]\d{2,6})\b/g)]
+    .map((match) => {
+      const normalizedAmount = match[1].replace(/[oO]/g, "0").replace(",", ".");
+      const amountText = normalizedAmount.startsWith(".") ? `0${normalizedAmount}` : normalizedAmount;
+
+      return Number(amountText);
+    })
+    .filter((amount) => Number.isFinite(amount) && amount > 0 && amount < MAX_DEVICE_ROW_AMOUNT);
+
+  return candidates.at(-1) ?? null;
+}
+
 function parseDeviceIncomeText(text: string, investments: Investment[]) {
   const investmentByKey = new Map(investments.map((investment) => [getDeviceIncomeKey(getInvestmentName(investment)), investment]));
   const groups = new Map<string, { deviceNames: Set<string>; amount: number }>();
@@ -236,12 +250,9 @@ function parseDeviceIncomeText(text: string, investments: Investment[]) {
       continue;
     }
 
-    const dollarAmounts = [...row.matchAll(/\$\s*([0-9]+(?:\.[0-9]+)?)/g)];
-    const plainAmounts = [...row.matchAll(/\b(0\.[0-9]{2,})\b/g)];
-    const amountText = dollarAmounts.at(-1)?.[1] ?? plainAmounts.at(-1)?.[1];
-    const amount = amountText ? Number(amountText) : Number.NaN;
+    const amount = getDeviceRowAmount(row);
 
-    if (!Number.isFinite(amount) || amount <= 0) {
+    if (amount === null) {
       continue;
     }
 
