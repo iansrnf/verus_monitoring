@@ -62,6 +62,28 @@ type ServerConfig = {
   password: string | null;
 };
 
+type EarnAppDevice = {
+  uuid: string;
+  title: string;
+  rate: number;
+  earned: number;
+  earned_total: number;
+  country: string;
+  ips: string[];
+  billing: string;
+  uptime: number;
+  total_uptime: number;
+};
+
+type EarnAppGroup = {
+  key: string;
+  label: string;
+  devices: EarnAppDevice[];
+  activeCount: number;
+  earned: number;
+  earnedTotal: number;
+};
+
 type ScreenshotPreview = {
   src: string;
   deviceName: string;
@@ -143,6 +165,36 @@ function formatRelativeTime(from: number | null, now: number) {
   const value = Math.floor(elapsedSeconds / unit.seconds);
 
   return `${value} ${unit.label}${value === 1 ? "" : "s"} ago`;
+}
+
+function formatUsdAmount(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 3,
+    maximumFractionDigits: 3,
+  }).format(value);
+}
+
+function formatUptime(milliseconds: number) {
+  if (!Number.isFinite(milliseconds) || milliseconds <= 0) {
+    return "offline";
+  }
+
+  const totalMinutes = Math.floor(milliseconds / 60_000);
+  const days = Math.floor(totalMinutes / 1_440);
+  const hours = Math.floor((totalMinutes % 1_440) / 60);
+  const minutes = totalMinutes % 60;
+
+  if (days > 0) {
+    return `${days}d ${hours}h`;
+  }
+
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  }
+
+  return `${minutes}m`;
 }
 
 function formatHashRate(value: string | null) {
@@ -278,11 +330,14 @@ function getDeviceDisplayName(device: Device) {
   return device.name?.trim() || "Unnamed phone";
 }
 
-function getWildcardGroupBase(device: Device) {
-  const deviceName = getDeviceDisplayName(device);
+function getNameGroupBase(deviceName: string) {
   const match = deviceName.match(/^(.+?)(\d+).*$/);
 
   return match?.[1]?.trim() || deviceName;
+}
+
+function getWildcardGroupBase(device: Device) {
+  return getNameGroupBase(getDeviceDisplayName(device));
 }
 
 function getWildcardSearchValue(value: string) {
@@ -391,6 +446,40 @@ function getDeviceGroups(devices: DeviceWithComputedStatus[]) {
     });
 }
 
+function getEarnAppGroups(devices: EarnAppDevice[]) {
+  const groupedDevices = new Map<string, EarnAppDevice[]>();
+
+  devices.forEach((device) => {
+    const groupBase = getNameGroupBase(device.title);
+    const key = groupBase.toLowerCase();
+    const matchingDevices = groupedDevices.get(key) ?? [];
+
+    matchingDevices.push(device);
+    groupedDevices.set(key, matchingDevices);
+  });
+
+  return Array.from(groupedDevices.entries())
+    .map(([key, matchingDevices]): EarnAppGroup => {
+      const sortedDevices = [...matchingDevices].sort((firstDevice, secondDevice) => compareText(firstDevice.title, secondDevice.title));
+      const earned = sortedDevices.reduce((total, device) => total + device.earned, 0);
+      const earnedTotal = sortedDevices.reduce((total, device) => total + device.earned_total, 0);
+
+      return {
+        key,
+        label: `${getNameGroupBase(sortedDevices[0]?.title ?? key)}*`,
+        devices: sortedDevices,
+        activeCount: sortedDevices.filter((device) => device.uptime > 0 || device.earned > 0).length,
+        earned,
+        earnedTotal,
+      };
+    })
+    .sort((firstGroup, secondGroup) => {
+      const earnedComparison = secondGroup.earned - firstGroup.earned;
+
+      return earnedComparison || compareText(firstGroup.label, secondGroup.label);
+    });
+}
+
 function getGroupHeaderClassName(group: DeviceGroup) {
   if (group.onlineCount === 0) {
     return "groupHeader allOffline";
@@ -413,6 +502,10 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [savingConfig, setSavingConfig] = useState(false);
   const [serverConfig, setServerConfig] = useState<ServerConfig | null>(null);
+  const [earnAppDevices, setEarnAppDevices] = useState<EarnAppDevice[]>([]);
+  const [earnAppLoading, setEarnAppLoading] = useState(false);
+  const [earnAppCheckedAt, setEarnAppCheckedAt] = useState<string | null>(null);
+  const [earnAppError, setEarnAppError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [configMessage, setConfigMessage] = useState<string | null>(null);
   const [screenshotPreview, setScreenshotPreview] = useState<ScreenshotPreview | null>(null);
@@ -444,6 +537,27 @@ export default function Home() {
     if (response.ok) {
       setServerConfig(result.config ?? null);
     }
+  }, []);
+
+  const loadEarnAppDevices = useCallback(async () => {
+    setEarnAppLoading(true);
+    setEarnAppError(null);
+
+    try {
+      const response = await fetch(getAppPath("/api/earnapp/devices"), { cache: "no-store" });
+      const result = (await response.json()) as { checkedAt?: string; devices?: EarnAppDevice[]; error?: string };
+
+      if (!response.ok) {
+        setEarnAppError(result.error ?? "Failed to load EarnApp devices.");
+      } else {
+        setEarnAppDevices(result.devices ?? []);
+        setEarnAppCheckedAt(result.checkedAt ?? new Date().toISOString());
+      }
+    } catch (loadError) {
+      setEarnAppError(loadError instanceof Error ? loadError.message : "Failed to load EarnApp devices.");
+    }
+
+    setEarnAppLoading(false);
   }, []);
 
   async function loadSelectedConfig() {
@@ -536,7 +650,8 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadDevices(false);
     void loadServerConfig();
-  }, [loadDevices, loadServerConfig]);
+    void loadEarnAppDevices();
+  }, [loadDevices, loadEarnAppDevices, loadServerConfig]);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -659,6 +774,10 @@ export default function Home() {
   const onlineCount = uniqueDevicesWithStatus.filter((device) => device.computedOnline).length;
   const offlineCount = uniqueDevicesWithStatus.length - onlineCount;
   const recentOfflineCount = uniqueDevicesWithStatus.filter((device) => isRecentlyOffline(device, now)).length;
+  const earnAppGroups = useMemo(() => getEarnAppGroups(earnAppDevices), [earnAppDevices]);
+  const earnAppActiveCount = earnAppDevices.filter((device) => device.uptime > 0 || device.earned > 0).length;
+  const earnAppEarned = earnAppDevices.reduce((total, device) => total + device.earned, 0);
+  const earnAppEarnedTotal = earnAppDevices.reduce((total, device) => total + device.earned_total, 0);
   const onlineHashTotal = uniqueDevicesWithStatus.reduce((total, device) => {
     if (!device.computedOnline) {
       return total;
@@ -783,6 +902,129 @@ export default function Home() {
               ) : (
                 <p className="configMessage">No server config loaded.</p>
               )}
+            </section>
+
+            <section className="earnAppPanel" aria-label="EarnApp device status">
+              <div className="earnAppHeader">
+                <div>
+                  <span>EarnApp Devices</span>
+                  <strong>Dashboard API status</strong>
+                </div>
+                <button className="loadConfig" type="button" onClick={() => void loadEarnAppDevices()} disabled={earnAppLoading}>
+                  <RefreshCw size={17} />
+                  {earnAppLoading ? "Loading..." : "Refresh EarnApp"}
+                </button>
+              </div>
+
+              <div className="earnAppMetrics">
+                <div>
+                  <span>Total</span>
+                  <strong>{earnAppDevices.length}</strong>
+                </div>
+                <div>
+                  <span>Active</span>
+                  <strong>{earnAppActiveCount}</strong>
+                </div>
+                <div>
+                  <span>Earned</span>
+                  <strong>{formatUsdAmount(earnAppEarned)}</strong>
+                </div>
+                <div>
+                  <span>Total Earned</span>
+                  <strong>{formatUsdAmount(earnAppEarnedTotal)}</strong>
+                </div>
+              </div>
+
+              {earnAppCheckedAt ? <p className="configMessage">Last checked {formatDate(earnAppCheckedAt)}</p> : null}
+              {earnAppError ? <div className="notice">{earnAppError}</div> : null}
+
+              {earnAppGroups.length > 0 ? (
+                <div className="earnAppGroups" aria-label="EarnApp groups">
+                  {earnAppGroups.map((group) => (
+                    <article className="earnAppGroup" key={group.key}>
+                      <div>
+                        <strong>{group.label}</strong>
+                        <span>{group.devices.map((device) => device.title).join(", ")}</span>
+                      </div>
+                      <dl>
+                        <div>
+                          <dt>Devices</dt>
+                          <dd>{group.devices.length}</dd>
+                        </div>
+                        <div>
+                          <dt>Active</dt>
+                          <dd>{group.activeCount}</dd>
+                        </div>
+                        <div>
+                          <dt>Earned</dt>
+                          <dd>{formatUsdAmount(group.earned)}</dd>
+                        </div>
+                      </dl>
+                    </article>
+                  ))}
+                </div>
+              ) : null}
+
+              <div className="tableWrap earnAppTable">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Device</th>
+                      <th>Status</th>
+                      <th>Country</th>
+                      <th>Uptime</th>
+                      <th>Rate</th>
+                      <th>Earned</th>
+                      <th>Total</th>
+                      <th>IP</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {earnAppLoading && earnAppDevices.length === 0 ? (
+                      <tr>
+                        <td className="empty" colSpan={8}>
+                          Loading EarnApp devices...
+                        </td>
+                      </tr>
+                    ) : earnAppDevices.length === 0 ? (
+                      <tr>
+                        <td className="empty" colSpan={8}>
+                          No EarnApp devices loaded.
+                        </td>
+                      </tr>
+                    ) : (
+                      earnAppDevices.map((device) => {
+                        const active = device.uptime > 0 || device.earned > 0;
+
+                        return (
+                          <tr key={device.uuid || device.title}>
+                            <td>
+                              <div className="deviceName">
+                                <strong>{device.title}</strong>
+                                <span>{device.uuid}</span>
+                              </div>
+                            </td>
+                            <td>
+                              <span className={`status ${active ? "online" : "offline"}`}>
+                                <span className="dot" aria-hidden="true" />
+                                {active ? "Active" : "Offline"}
+                              </span>
+                            </td>
+                            <td>{device.country.toUpperCase() || "-"}</td>
+                            <td className="mono">{formatUptime(device.uptime)}</td>
+                            <td className="mono">${device.rate}</td>
+                            <td className="mono">{formatUsdAmount(device.earned)}</td>
+                            <td className="mono">{formatUsdAmount(device.earned_total)}</td>
+                            <td className="mono" title={device.ips.join(", ")}>
+                              {device.ips[0] ?? "-"}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </section>
 
             <div className="toolbar">

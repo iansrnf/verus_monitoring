@@ -174,6 +174,16 @@ select {
   margin-bottom: 14px;
 }
 
+.earnAppPanel {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 14px;
+}
+
 .currentConfigHeader {
   display: flex;
   align-items: center;
@@ -187,6 +197,118 @@ select {
   font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
+}
+
+.earnAppHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.earnAppHeader span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.earnAppHeader strong {
+  display: block;
+  margin-top: 4px;
+}
+
+.earnAppMetrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.earnAppMetrics div {
+  min-width: 0;
+  border: 1px solid var(--line);
+  background: #141619;
+  border-radius: 8px;
+  padding: 11px 12px;
+}
+
+.earnAppMetrics span,
+.earnAppGroup dt {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.earnAppMetrics strong {
+  display: block;
+  margin-top: 6px;
+  overflow-wrap: anywhere;
+  font-size: 20px;
+}
+
+.earnAppGroups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 10px;
+}
+
+.earnAppGroup {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  border: 1px solid var(--line);
+  background: #141619;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.earnAppGroup > div:first-child {
+  min-width: 0;
+}
+
+.earnAppGroup strong {
+  display: block;
+}
+
+.earnAppGroup span {
+  display: block;
+  margin-top: 5px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.earnAppGroup dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.earnAppGroup dl div {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px;
+}
+
+.earnAppGroup dd {
+  margin: 5px 0 0;
+  overflow-wrap: anywhere;
+  font-weight: 800;
+}
+
+.earnAppTable {
+  max-height: 460px;
+  overflow: auto;
+}
+
+.earnAppTable table {
+  min-width: 980px;
 }
 
 .currentConfigHeader button {
@@ -2223,6 +2345,7 @@ tr:last-child td {
 
   .topbar,
   .configControls,
+  .earnAppHeader,
   .toolbar {
     align-items: stretch;
     flex-direction: column;
@@ -2353,6 +2476,10 @@ tr:last-child td {
 
   .configPreview {
     grid-template-columns: 1fr;
+  }
+
+  .earnAppMetrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .tableWrap {
