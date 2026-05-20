@@ -685,6 +685,10 @@ export default function Home() {
               <ShieldCheck size={16} />
               Fail2Ban Monitor
             </Link>
+            <Link className="dashboardLink" href="/earnapp">
+              <Smartphone size={16} />
+              Manage EarnApp Devices
+            </Link>
             <LogoutButton />
           </div>
 
