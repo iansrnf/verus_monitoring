@@ -478,13 +478,62 @@ select {
   overflow: auto;
 }
 
-.usageModalTable {
+.usageDailyGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 10px;
   max-height: min(520px, 60vh);
   overflow: auto;
 }
 
-.usageModalTable table {
-  min-width: 520px;
+.usageDailyCard {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--line);
+  background: #141619;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.usageDailyCard.good {
+  border-color: rgba(52, 211, 153, 0.55);
+  background: rgba(52, 211, 153, 0.11);
+}
+
+.usageDailyCard.low {
+  border-color: rgba(255, 107, 107, 0.5);
+  background: rgba(255, 107, 107, 0.1);
+}
+
+.usageDailyCard span,
+.usageDailyCard dt {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.usageDailyCard strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 18px;
+}
+
+.usageDailyCard dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.usageDailyCard dl div {
+  min-width: 0;
+}
+
+.usageDailyCard dd {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+  font-weight: 800;
 }
 
 .earnAppDeleteDialog {

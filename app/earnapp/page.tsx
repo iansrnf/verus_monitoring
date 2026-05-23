@@ -67,6 +67,8 @@ type PendingDeleteSelection = {
 type EarnAppTab = "group" | "devices" | "recommended";
 
 const APP_BASE_PATH = "/verus-monitoring";
+const EARNAPP_HOURLY_RATE_USD = 0.0069;
+const EARNAPP_GOOD_USAGE_MS = 15 * 60 * 60 * 1000;
 
 function getAppPath(path: string) {
   return `${APP_BASE_PATH}${path}`;
@@ -145,6 +147,14 @@ function formatUsageDuration(value: number) {
   }
 
   return `${seconds}s`;
+}
+
+function getUsageEarned(value: number) {
+  if (!Number.isFinite(value) || value <= 0) {
+    return 0;
+  }
+
+  return (value / 3_600_000) * EARNAPP_HOURLY_RATE_USD;
 }
 
 function isEarnAppDeviceActive(device: EarnAppDevice) {
@@ -1011,7 +1021,7 @@ export default function EarnAppDevicesPage() {
                 </div>
                 <div>
                   <span>Total Earned</span>
-                  <strong>{modalUsage ? formatUsd(modalUsage.totalEarned) : "-"}</strong>
+                  <strong>{modalUsage ? formatUsd(getUsageEarned(modalUsage.totalUsage)) : "-"}</strong>
                 </div>
                 <div>
                   <span>Daily Records</span>
@@ -1023,34 +1033,34 @@ export default function EarnAppDevicesPage() {
                 </div>
               </div>
 
-              <div className="tableWrap usageModalTable">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Date</th>
-                      <th>Usage</th>
-                      <th>Earned</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {modalUsagePoints.length === 0 ? (
-                      <tr>
-                        <td className="empty" colSpan={3}>
-                          No usage records found for this device.
-                        </td>
-                      </tr>
-                    ) : (
-                      modalUsagePoints.map((point) => (
-                        <tr key={`${usageModalDevice.uuid}-${point.date}`}>
-                          <td>{formatDate(point.date)}</td>
-                          <td className="mono">{formatUsageDuration(point.usage)}</td>
-                          <td className="mono">{formatUsd(point.earned)}</td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+              {modalUsagePoints.length === 0 ? (
+                <div className="imageMergeEmpty">No usage records found for this device.</div>
+              ) : (
+                <div className="usageDailyGrid">
+                  {modalUsagePoints.map((point) => {
+                    const isGoodUsage = point.usage >= EARNAPP_GOOD_USAGE_MS;
+
+                    return (
+                      <article className={`usageDailyCard ${isGoodUsage ? "good" : "low"}`} key={`${usageModalDevice.uuid}-${point.date}`}>
+                        <div>
+                          <span>{formatShortDate(point.date)}</span>
+                          <strong>{formatUsageDuration(point.usage)}</strong>
+                        </div>
+                        <dl>
+                          <div>
+                            <dt>Earned</dt>
+                            <dd>{formatUsd(getUsageEarned(point.usage))}</dd>
+                          </div>
+                          <div>
+                            <dt>Status</dt>
+                            <dd>{isGoodUsage ? "15h+" : "Below 15h"}</dd>
+                          </div>
+                        </dl>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </div>
