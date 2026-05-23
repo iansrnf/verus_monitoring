@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Check, FileUp, Pencil, RefreshCw, Save, Search, Smartphone, Trash2, X } from "lucide-react";
+import { ArrowLeft, Check, FileUp, History, Pencil, RefreshCw, Save, Search, Smartphone, Trash2, X } from "lucide-react";
 import { LogoutButton } from "@/app/components/LogoutButton";
 import {
   EARNAPP_COOKIE_STORAGE_KEY,
@@ -876,6 +876,7 @@ export default function EarnAppDevicesPage() {
                       disabled={selectableVisibleDevices.length === 0}
                     />
                   </th>
+                  <th aria-label="Usage history"></th>
                   <th>Device</th>
                   <th>Status</th>
                   <th>Country</th>
@@ -885,7 +886,6 @@ export default function EarnAppDevicesPage() {
                   <th>Earned</th>
                   <th>Total</th>
                   <th>IP</th>
-                  <th>Usage History</th>
                   <th>Action</th>
                 </tr>
               </thead>
@@ -910,7 +910,6 @@ export default function EarnAppDevicesPage() {
                   visibleTableDevices.map((device, index) => {
                     const active = isEarnAppDeviceActive(device);
                     const usage = getDeviceUsage(device);
-                    const recentUsage = usage?.points.slice(-5).reverse() ?? [];
 
                     return (
                       <tr key={device.uuid || `${device.title}-${index}`}>
@@ -922,6 +921,17 @@ export default function EarnAppDevicesPage() {
                             disabled={!device.uuid.trim()}
                             aria-label={`Select ${device.title}`}
                           />
+                        </td>
+                        <td>
+                          <button
+                            type="button"
+                            className={`iconButton usageIconButton ${usage?.points.length ? "hasUsage" : ""}`}
+                            onClick={() => setUsageModalDevice(device)}
+                            aria-label={`View usage history for ${device.title}`}
+                            title={`View usage history${usage?.points.length ? ` (${formatUsage(usage.totalUsage)})` : ""}`}
+                          >
+                            <History size={16} />
+                          </button>
                         </td>
                         <td>
                           <div className="deviceName">
@@ -945,26 +955,6 @@ export default function EarnAppDevicesPage() {
                         <td className="mono">{formatUsd(device.earned_total)}</td>
                         <td className="mono" title={device.ips.join(", ")}>
                           {device.ips[0] ?? "-"}
-                        </td>
-                        <td>
-                          <div className="usageHistory">
-                            <strong>{usage?.totalUsage ? formatUsage(usage.totalUsage) : "-"}</strong>
-                            {recentUsage.length > 0 ? (
-                              <div className="usageHistoryDays">
-                                {recentUsage.map((point) => (
-                                  <span key={`${device.uuid}-${point.date}`} title={`${formatShortDate(point.date)}: ${formatUsage(point.usage)}${point.earned ? `, ${formatUsd(point.earned)}` : ""}`}>
-                                    {formatShortDate(point.date)}
-                                    <b>{formatUsage(point.usage)}</b>
-                                  </span>
-                                ))}
-                              </div>
-                            ) : (
-                              <span>No daily usage yet</span>
-                            )}
-                            <button type="button" className="secondaryButton compactButton" onClick={() => setUsageModalDevice(device)}>
-                              View Usage
-                            </button>
-                          </div>
                         </td>
                         <td>
                           <button
