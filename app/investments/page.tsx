@@ -24,6 +24,7 @@ import {
   X,
 } from "lucide-react";
 import { LogoutButton } from "@/app/components/LogoutButton";
+import { getValidSavedEarnAppCookie, saveEarnAppCookie } from "@/lib/earnapp-cookie";
 
 type Income = {
   id: number;
@@ -221,6 +222,14 @@ export default function InvestmentsPage() {
   const [applyingScreenshotIncome, setApplyingScreenshotIncome] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const importModeRef = useRef<ImportMode>("native");
+
+  useEffect(() => {
+    const savedCookie = getValidSavedEarnAppCookie(window.localStorage);
+
+    if (savedCookie) {
+      window.setTimeout(() => setEarnAppCookie(savedCookie.cookie), 0);
+    }
+  }, []);
 
   const loadAuditLogs = useCallback(async () => {
     const response = await fetch(getAppPath("/api/investments/audit"), { cache: "no-store" });
@@ -670,6 +679,7 @@ export default function InvestmentsPage() {
         throw new Error(result.error ?? "Failed to load EarnApp devices.");
       }
 
+      saveEarnAppCookie(window.localStorage, cookie);
       const groups = getEarnAppIncomeGroups(result.devices ?? [], investments);
 
       setScreenshotIncomeGroups(groups);

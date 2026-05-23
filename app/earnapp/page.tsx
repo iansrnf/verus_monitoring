@@ -4,6 +4,12 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Check, FileUp, Pencil, RefreshCw, Save, Search, Smartphone, Trash2, X } from "lucide-react";
 import { LogoutButton } from "@/app/components/LogoutButton";
+import {
+  EARNAPP_COOKIE_STORAGE_KEY,
+  getSavedEarnAppCookieTimeLeft,
+  getValidSavedEarnAppCookie,
+  saveEarnAppCookie,
+} from "@/lib/earnapp-cookie";
 
 type EarnAppDevice = {
   [key: string]: unknown;
@@ -18,6 +24,21 @@ type EarnAppDevice = {
   uptime: number;
   total_uptime: number;
   raw?: unknown;
+};
+
+type EarnAppUsagePoint = {
+  date: string;
+  usage: number;
+  earned: number;
+  raw: unknown;
+};
+
+type EarnAppDeviceUsage = {
+  uuid: string;
+  title: string;
+  totalUsage: number;
+  totalEarned: number;
+  points: EarnAppUsagePoint[];
 };
 
 type Investment = {
@@ -46,13 +67,6 @@ type PendingDeleteSelection = {
 type EarnAppTab = "group" | "devices" | "recommended";
 
 const APP_BASE_PATH = "/verus-monitoring";
-const EARNAPP_COOKIE_STORAGE_KEY = "earnapp-cookie-cache";
-const EARNAPP_COOKIE_TTL_MS = 60 * 60 * 1000;
-
-type SavedEarnAppCookie = {
-  cookie: string;
-  expiresAt: number;
-};
 
 function getAppPath(path: string) {
   return `${APP_BASE_PATH}${path}`;
@@ -99,6 +113,36 @@ function formatDate(value: string | null) {
   }).format(new Date(value));
 }
 
+function formatShortDate(value: string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+  }).format(date);
+}
+
+function formatUsage(value: number) {
+  if (!Number.isFinite(value) || value <= 0) {
+    return "-";
+  }
+
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let nextValue = value;
+  let unitIndex = 0;
+
+  while (nextValue >= 1024 && unitIndex < units.length - 1) {
+    nextValue /= 1024;
+    unitIndex += 1;
+  }
+
+  return `${nextValue >= 10 || unitIndex === 0 ? nextValue.toFixed(0) : nextValue.toFixed(1)} ${units[unitIndex]}`;
+}
+
 function isEarnAppDeviceActive(device: EarnAppDevice) {
   return device.uptime > 0 || device.earned > 0;
 }
@@ -133,33 +177,23 @@ function getSelectionEarned(selection: PendingDeleteSelection | null) {
   return selection?.devices.reduce((total, device) => total + device.earned, 0) ?? 0;
 }
 
-function getSavedCookieTimeLeft(expiresAt: number | null) {
-  if (!expiresAt) {
-    return "not saved";
-  }
-
-  const remainingMinutes = Math.max(0, Math.ceil((expiresAt - Date.now()) / 60_000));
-
-  if (remainingMinutes >= 60) {
-    return "valid for 1 hour";
-  }
-
-  return `valid for ${remainingMinutes} minute${remainingMinutes === 1 ? "" : "s"}`;
-}
-
 export default function EarnAppDevicesPage() {
   const [cookie, setCookie] = useState("");
   const [savedCookie, setSavedCookie] = useState("");
   const [savedCookieExpiresAt, setSavedCookieExpiresAt] = useState<number | null>(null);
   const [editingCookie, setEditingCookie] = useState(true);
   const [devices, setDevices] = useState<EarnAppDevice[]>([]);
+  const [usageByDevice, setUsageByDevice] = useState<Record<string, EarnAppDeviceUsage>>({});
   const [verusDevices, setVerusDevices] = useState<VerusDevice[]>([]);
   const [investments, setInvestments] = useState<Investment[]>([]);
   const [checkedAt, setCheckedAt] = useState<string | null>(null);
+  const [usageCheckedAt, setUsageCheckedAt] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [earnAppTab, setEarnAppTab] = useState<EarnAppTab>("group");
   const [loading, setLoading] = useState(false);
   const [deletingUuid, setDeletingUuid] = useState<string | null>(null);
+  const [selectedDeviceUuids, setSelectedDeviceUuids] = useState<string[]>([]);
+  const [selectedGroupKeys, setSelectedGroupKeys] = useState<string[]>([]);
   const [pendingDelete, setPendingDelete] = useState<PendingDeleteSelection | null>(null);
   const [targetInvestmentId, setTargetInvestmentId] = useState<number | null>(null);
   const [incomeSaved, setIncomeSaved] = useState(false);
@@ -184,11 +218,9 @@ export default function EarnAppDevicesPage() {
       return;
     }
 
-    const expiresAt = Date.now() + EARNAPP_COOKIE_TTL_MS;
-    const savedValue: SavedEarnAppCookie = { cookie: nextCookie, expiresAt };
+    const savedValue = saveEarnAppCookie(window.localStorage, nextCookie);
 
-    window.localStorage.setItem(EARNAPP_COOKIE_STORAGE_KEY, JSON.stringify(savedValue));
-    applySavedCookie(nextCookie, expiresAt);
+    applySavedCookie(savedValue.cookie, savedValue.expiresAt);
     setError(null);
   }
 
@@ -248,27 +280,10 @@ export default function EarnAppDevicesPage() {
   }, []);
 
   useEffect(() => {
-    try {
-      const storedCookie = window.localStorage.getItem(EARNAPP_COOKIE_STORAGE_KEY);
+    const parsedCookie = getValidSavedEarnAppCookie(window.localStorage);
 
-      if (!storedCookie) {
-        return;
-      }
-
-      const parsedCookie = JSON.parse(storedCookie) as SavedEarnAppCookie;
-
-      if (typeof parsedCookie.cookie !== "string" || !Number.isFinite(parsedCookie.expiresAt)) {
-        return;
-      }
-
-      if (parsedCookie.expiresAt <= Date.now()) {
-        window.localStorage.removeItem(EARNAPP_COOKIE_STORAGE_KEY);
-        return;
-      }
-
+    if (parsedCookie) {
       window.setTimeout(() => applySavedCookie(parsedCookie.cookie, parsedCookie.expiresAt), 0);
-    } catch {
-      window.localStorage.removeItem(EARNAPP_COOKIE_STORAGE_KEY);
     }
   }, []);
 
@@ -301,20 +316,39 @@ export default function EarnAppDevicesPage() {
     setError(null);
 
     try {
-      const response = await fetch(getAppPath("/api/earnapp/devices"), {
-        method: "POST",
-        cache: "no-store",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cookie: pastedCookie }),
-      });
-      const result = (await response.json()) as { checkedAt?: string; devices?: EarnAppDevice[]; error?: string };
+      const [devicesResponse, usageResponse] = await Promise.all([
+        fetch(getAppPath("/api/earnapp/devices"), {
+          method: "POST",
+          cache: "no-store",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ cookie: pastedCookie }),
+        }),
+        fetch(getAppPath("/api/earnapp/usage"), {
+          method: "POST",
+          cache: "no-store",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ cookie: pastedCookie }),
+        }),
+      ]);
+      const result = (await devicesResponse.json()) as { checkedAt?: string; devices?: EarnAppDevice[]; error?: string };
+      const usageResult = (await usageResponse.json()) as {
+        checkedAt?: string;
+        usageByDevice?: Record<string, EarnAppDeviceUsage>;
+        error?: string;
+      };
 
-      if (!response.ok) {
+      if (!devicesResponse.ok) {
         throw new Error(result.error ?? "Failed to load EarnApp devices.");
       }
 
       setDevices(result.devices ?? []);
       setCheckedAt(result.checkedAt ?? new Date().toISOString());
+      setUsageByDevice(usageResponse.ok ? (usageResult.usageByDevice ?? {}) : {});
+      setUsageCheckedAt(usageResponse.ok ? (usageResult.checkedAt ?? new Date().toISOString()) : null);
+
+      if (!usageResponse.ok) {
+        setError(usageResult.error ? `Devices loaded, but usage history failed: ${usageResult.error}` : "Devices loaded, but usage history failed.");
+      }
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Failed to load EarnApp devices.");
     } finally {
@@ -330,6 +364,59 @@ export default function EarnAppDevicesPage() {
     setTargetInvestmentId(matchingInvestment?.id ?? null);
     setIncomeSaved(earnedAmount <= 0);
     setError(null);
+  }
+
+  function getDeviceSelectionKey(device: EarnAppDevice) {
+    return device.uuid || `${device.title}-${device.country}-${device.ips[0] ?? ""}`;
+  }
+
+  function toggleSelectedDevice(device: EarnAppDevice) {
+    const uuid = device.uuid.trim();
+
+    if (!uuid) {
+      return;
+    }
+
+    setSelectedDeviceUuids((currentUuids) =>
+      currentUuids.includes(uuid) ? currentUuids.filter((currentUuid) => currentUuid !== uuid) : [...currentUuids, uuid],
+    );
+  }
+
+  function toggleSelectedGroup(group: EarnAppDeviceGroup) {
+    setSelectedGroupKeys((currentKeys) =>
+      currentKeys.includes(group.key) ? currentKeys.filter((currentKey) => currentKey !== group.key) : [...currentKeys, group.key],
+    );
+  }
+
+  function openBatchDeviceDeleteModal() {
+    const selectedDevices = devices.filter((device) => selectedDeviceUuids.includes(device.uuid));
+
+    if (selectedDevices.length === 0) {
+      setError("Choose at least one EarnApp device to delete.");
+      return;
+    }
+
+    openDeleteModal({
+      key: `batch-devices-${selectedDevices.map((device) => device.uuid).join("-")}`,
+      title: `${selectedDevices.length} selected device${selectedDevices.length === 1 ? "" : "s"}`,
+      devices: selectedDevices,
+    });
+  }
+
+  function openBatchGroupDeleteModal(groups: EarnAppDeviceGroup[]) {
+    const selectedGroups = groups.filter((group) => selectedGroupKeys.includes(group.key));
+    const selectedDevices = selectedGroups.flatMap((group) => group.devices);
+
+    if (selectedDevices.length === 0) {
+      setError("Choose at least one EarnApp group to delete.");
+      return;
+    }
+
+    openDeleteModal({
+      key: `batch-groups-${selectedGroups.map((group) => group.key).join("-")}`,
+      title: `${selectedGroups.length} selected group${selectedGroups.length === 1 ? "" : "s"}`,
+      devices: selectedDevices,
+    });
   }
 
   async function saveDeviceIncome() {
@@ -415,6 +502,8 @@ export default function EarnAppDevicesPage() {
       const deletedUuids = new Set(devicesToDelete.map((device) => device.uuid));
 
       setDevices((currentDevices) => currentDevices.filter((currentDevice) => !deletedUuids.has(currentDevice.uuid)));
+      setSelectedDeviceUuids((currentUuids) => currentUuids.filter((uuid) => !deletedUuids.has(uuid)));
+      setSelectedGroupKeys([]);
       setPendingDelete(null);
       setIncomeSaved(false);
       setTargetInvestmentId(null);
@@ -477,10 +566,17 @@ export default function EarnAppDevicesPage() {
     [filteredDevices, offlineVerusDeviceNames],
   );
   const visibleTableDevices = earnAppTab === "recommended" ? recommendedDevices : filteredDevices;
+  const selectableVisibleDevices = visibleTableDevices.filter((device) => device.uuid.trim());
+  const selectedVisibleDeviceCount = selectableVisibleDevices.filter((device) => selectedDeviceUuids.includes(device.uuid)).length;
+  const selectedGroupCount = filteredGroups.filter((group) => selectedGroupKeys.includes(group.key)).length;
+  const selectedGroupDeviceCount = filteredGroups
+    .filter((group) => selectedGroupKeys.includes(group.key))
+    .reduce((total, group) => total + group.devices.filter((device) => device.uuid.trim()).length, 0);
   const activeCount = devices.filter(isEarnAppDeviceActive).length;
   const earned = devices.reduce((total, device) => total + device.earned, 0);
   const earnedTotal = devices.reduce((total, device) => total + device.earned_total, 0);
   const zeroEarnedCount = devices.filter((device) => device.earned <= 0).length;
+  const usageDeviceCount = Object.values(usageByDevice).filter((usage) => usage.points.length > 0).length;
 
   return (
     <main className="page earnAppPage">
@@ -521,11 +617,11 @@ export default function EarnAppDevicesPage() {
           <div className="earnAppHeader">
             <div>
               <span>EarnApp API</span>
-              <strong>{activeCookie && !editingCookie ? `Cookie saved, ${getSavedCookieTimeLeft(savedCookieExpiresAt)}` : "Paste cookie or exported cookies JSON"}</strong>
+              <strong>{activeCookie && !editingCookie ? `Cookie saved, ${getSavedEarnAppCookieTimeLeft(savedCookieExpiresAt)}` : "Paste cookie or exported cookies JSON"}</strong>
             </div>
             <button className="loadConfig" type="button" onClick={() => void loadEarnAppDevices()} disabled={loading || !activeCookie}>
               <RefreshCw size={17} />
-              {loading ? "Loading..." : "Load Devices"}
+              {loading ? "Loading..." : "Load Devices + Usage"}
             </button>
           </div>
 
@@ -564,13 +660,13 @@ export default function EarnAppDevicesPage() {
                 </button>
                 <button type="button" className="loadConfig" onClick={saveCookie} disabled={!cookie.trim()}>
                   <Save size={17} />
-                  Save for 1 hour
+                  Save for 1 day
                 </button>
               </div>
             </div>
           ) : (
             <div className="earnAppCookieSaved">
-              <span>{getSavedCookieTimeLeft(savedCookieExpiresAt)}</span>
+              <span>{getSavedEarnAppCookieTimeLeft(savedCookieExpiresAt)}</span>
               <div>
                 <button type="button" className="secondaryButton" onClick={editCookie}>
                   <Pencil size={17} />
@@ -598,8 +694,12 @@ export default function EarnAppDevicesPage() {
               <strong>{new Set(devices.map((device) => device.country).filter(Boolean)).size}</strong>
             </div>
             <div>
+              <span>Usage History</span>
+              <strong>{usageDeviceCount ? `${usageDeviceCount} devices` : "-"}</strong>
+            </div>
+            <div>
               <span>Last Check</span>
-              <strong>{checkedAt ? formatDate(checkedAt) : "-"}</strong>
+              <strong>{usageCheckedAt ? formatDate(usageCheckedAt) : checkedAt ? formatDate(checkedAt) : "-"}</strong>
             </div>
           </div>
 
@@ -653,12 +753,39 @@ export default function EarnAppDevicesPage() {
           {filteredGroups.length === 0 ? (
             <div className="imageMergeEmpty">No groups loaded.</div>
           ) : (
+            <>
+            <div className="batchActions">
+              <label className="selectionToggle">
+                <input
+                  type="checkbox"
+                  checked={filteredGroups.length > 0 && selectedGroupCount === filteredGroups.length}
+                  onChange={(event) => setSelectedGroupKeys(event.target.checked ? filteredGroups.map((group) => group.key) : [])}
+                />
+                <span>Select groups</span>
+              </label>
+              <div>
+                <span>
+                  {selectedGroupCount} group{selectedGroupCount === 1 ? "" : "s"}, {selectedGroupDeviceCount} device
+                  {selectedGroupDeviceCount === 1 ? "" : "s"}
+                </span>
+                <button type="button" className="loadConfig dangerButton" onClick={() => openBatchGroupDeleteModal(filteredGroups)} disabled={selectedGroupCount === 0 || Boolean(deletingUuid)}>
+                  <Trash2 size={17} />
+                  Delete Selected
+                </button>
+              </div>
+            </div>
             <div className="earnAppGroups">
               {filteredGroups.map((group) => (
                 <article className="earnAppGroup" key={group.key}>
-                  <div>
-                    <strong>{group.label}</strong>
-                    <span>{group.devices.map((device) => device.title).join(", ")}</span>
+                  <div className="earnAppGroupHeader">
+                    <label className="selectionToggle iconOnly" title={`Select ${group.label}`}>
+                      <input type="checkbox" checked={selectedGroupKeys.includes(group.key)} onChange={() => toggleSelectedGroup(group)} />
+                      <span>Select {group.label}</span>
+                    </label>
+                    <div>
+                      <strong>{group.label}</strong>
+                      <span>{group.devices.map((device) => device.title).join(", ")}</span>
+                    </div>
                   </div>
                   <dl>
                     <div>
@@ -692,15 +819,44 @@ export default function EarnAppDevicesPage() {
                 </article>
               ))}
             </div>
+            </>
           )}
         </section>
         ) : (
 
         <section className="earnAppSection" aria-label="All EarnApp devices">
+          <div className="batchActions">
+            <label className="selectionToggle">
+              <input
+                type="checkbox"
+                checked={selectableVisibleDevices.length > 0 && selectedVisibleDeviceCount === selectableVisibleDevices.length}
+                onChange={(event) => setSelectedDeviceUuids(event.target.checked ? selectableVisibleDevices.map((device) => device.uuid) : [])}
+                disabled={selectableVisibleDevices.length === 0}
+              />
+              <span>Select visible</span>
+            </label>
+            <div>
+              <span>
+                {selectedDeviceUuids.length} device{selectedDeviceUuids.length === 1 ? "" : "s"} selected
+              </span>
+              <button type="button" className="loadConfig dangerButton" onClick={openBatchDeviceDeleteModal} disabled={selectedDeviceUuids.length === 0 || Boolean(deletingUuid)}>
+                <Trash2 size={17} />
+                Delete Selected
+              </button>
+            </div>
+          </div>
           <div className="tableWrap earnAppTable">
             <table>
               <thead>
                 <tr>
+                  <th aria-label="Select devices">
+                    <input
+                      type="checkbox"
+                      checked={selectableVisibleDevices.length > 0 && selectedVisibleDeviceCount === selectableVisibleDevices.length}
+                      onChange={(event) => setSelectedDeviceUuids(event.target.checked ? selectableVisibleDevices.map((device) => device.uuid) : [])}
+                      disabled={selectableVisibleDevices.length === 0}
+                    />
+                  </th>
                   <th>Device</th>
                   <th>Status</th>
                   <th>Country</th>
@@ -710,19 +866,20 @@ export default function EarnAppDevicesPage() {
                   <th>Earned</th>
                   <th>Total</th>
                   <th>IP</th>
+                  <th>Usage History</th>
                   <th>Action</th>
                 </tr>
               </thead>
               <tbody>
                 {loading && devices.length === 0 ? (
                   <tr>
-                    <td className="empty" colSpan={10}>
+                    <td className="empty" colSpan={12}>
                       Loading EarnApp devices...
                     </td>
                   </tr>
                 ) : visibleTableDevices.length === 0 ? (
                   <tr>
-                    <td className="empty" colSpan={10}>
+                    <td className="empty" colSpan={12}>
                       {devices.length > 0
                         ? earnAppTab === "recommended"
                           ? "No EarnApp devices match offline Verus devices."
@@ -733,9 +890,20 @@ export default function EarnAppDevicesPage() {
                 ) : (
                   visibleTableDevices.map((device, index) => {
                     const active = isEarnAppDeviceActive(device);
+                    const usage = usageByDevice[device.uuid];
+                    const recentUsage = usage?.points.slice(-5).reverse() ?? [];
 
                     return (
                       <tr key={device.uuid || `${device.title}-${index}`}>
+                        <td>
+                          <input
+                            type="checkbox"
+                            checked={selectedDeviceUuids.includes(device.uuid)}
+                            onChange={() => toggleSelectedDevice(device)}
+                            disabled={!device.uuid.trim()}
+                            aria-label={`Select ${device.title}`}
+                          />
+                        </td>
                         <td>
                           <div className="deviceName">
                             <strong>{device.title}</strong>
@@ -758,6 +926,23 @@ export default function EarnAppDevicesPage() {
                         <td className="mono">{formatUsd(device.earned_total)}</td>
                         <td className="mono" title={device.ips.join(", ")}>
                           {device.ips[0] ?? "-"}
+                        </td>
+                        <td>
+                          <div className="usageHistory">
+                            <strong>{usage?.totalUsage ? formatUsage(usage.totalUsage) : "-"}</strong>
+                            {recentUsage.length > 0 ? (
+                              <div className="usageHistoryDays">
+                                {recentUsage.map((point) => (
+                                  <span key={`${device.uuid}-${point.date}`} title={`${formatShortDate(point.date)}: ${formatUsage(point.usage)}${point.earned ? `, ${formatUsd(point.earned)}` : ""}`}>
+                                    {formatShortDate(point.date)}
+                                    <b>{formatUsage(point.usage)}</b>
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <span>No daily usage yet</span>
+                            )}
+                          </div>
                         </td>
                         <td>
                           <button
