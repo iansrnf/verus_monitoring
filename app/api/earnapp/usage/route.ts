@@ -126,6 +126,10 @@ function normalizeDate(value: unknown) {
   return "";
 }
 
+function isDateKey(value: string) {
+  return /^\d{4}[-/]\d{1,2}[-/]\d{1,2}$/.test(value);
+}
+
 function getNestedPoints(record: Record<string, unknown>) {
   for (const key of ["points", "usage", "history", "daily", "days", "items", "data"]) {
     const value = record[key];
@@ -141,7 +145,7 @@ function getNestedPoints(record: Record<string, unknown>) {
 function getDateKeyedPoints(record: Record<string, unknown>) {
   return Object.entries(record)
     .map(([date, value]) => {
-      if (!/^\d{4}[-/]\d{1,2}[-/]\d{1,2}$/.test(date)) {
+      if (!isDateKey(date)) {
         return null;
       }
 
@@ -154,6 +158,18 @@ function getDateKeyedPoints(record: Record<string, unknown>) {
       return pointRecord ? normalizeUsagePoint({ ...pointRecord, date }) : null;
     })
     .filter((point): point is UsagePoint => Boolean(point));
+}
+
+function getNestedDeviceMap(record: Record<string, unknown>) {
+  for (const key of ["devices", "device_usage", "usage", "data"]) {
+    const value = record[key];
+
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      return value as Record<string, unknown>;
+    }
+  }
+
+  return null;
 }
 
 function normalizeUsagePoint(value: unknown, fallbackDate = ""): UsagePoint | null {
@@ -213,6 +229,71 @@ function addDeviceUsage(target: Map<string, DeviceUsage>, uuid: string, title: s
   target.set(uuid, existing);
 }
 
+function addDateDeviceMap(target: Map<string, DeviceUsage>, date: string, deviceMap: Record<string, unknown>) {
+  Object.entries(deviceMap).forEach(([uuid, value]) => {
+    if (typeof value === "number") {
+      const point = normalizeUsagePoint([date, value]);
+
+      addDeviceUsage(target, uuid, "", point ? [point] : []);
+      return;
+    }
+
+    const record = toRecord(value);
+
+    if (!record) {
+      return;
+    }
+
+    const point = normalizeUsagePoint({ ...record, date });
+    const title = getString(record, ["title", "name", "device", "device_name"]);
+
+    addDeviceUsage(target, uuid, title, point ? [point] : []);
+  });
+}
+
+function addUsageContainer(target: Map<string, DeviceUsage>, container: Record<string, unknown>) {
+  Object.entries(container).forEach(([uuid, value]) => {
+    if (isDateKey(uuid)) {
+      const deviceMap = toRecord(value);
+
+      if (deviceMap) {
+        addDateDeviceMap(target, uuid, deviceMap);
+      }
+
+      return;
+    }
+
+    if (Array.isArray(value)) {
+      addDeviceUsage(
+        target,
+        uuid,
+        "",
+        value.map((point) => normalizeUsagePoint(point)).filter((point): point is UsagePoint => Boolean(point)),
+      );
+      return;
+    }
+
+    const record = toRecord(value);
+
+    if (!record) {
+      return;
+    }
+
+    const nestedPoints = getNestedPoints(record);
+    const points =
+      nestedPoints.length > 0
+        ? nestedPoints.map((point) => normalizeUsagePoint(point)).filter((point): point is UsagePoint => Boolean(point))
+        : getDateKeyedPoints(record);
+
+    addDeviceUsage(
+      target,
+      uuid,
+      getString(record, ["title", "name", "device", "device_name"]),
+      points,
+    );
+  });
+}
+
 function normalizeUsage(data: unknown) {
   const usageByDevice = new Map<string, DeviceUsage>();
   const source = toRecord(data);
@@ -230,6 +311,14 @@ function normalizeUsage(data: unknown) {
       const uuid = getString(record, ["uuid", "device_uuid", "deviceId", "device_id", "id"]);
       const title = getString(record, ["title", "name", "device", "device_name"]);
       const nestedPoints = getNestedPoints(record);
+      const rowDate = getString(record, ["date", "day", "dt", "time", "timestamp", "created_at"]);
+      const nestedDeviceMap = rowDate ? getNestedDeviceMap(record) : null;
+
+      if (nestedDeviceMap) {
+        addDateDeviceMap(usageByDevice, rowDate, nestedDeviceMap);
+        return;
+      }
+
       const points =
         nestedPoints.length > 0
           ? nestedPoints.map((point) => normalizeUsagePoint(point)).filter((point): point is UsagePoint => Boolean(point))
@@ -243,6 +332,22 @@ function normalizeUsage(data: unknown) {
   if (source) {
     Object.entries(source).forEach(([uuid, value]) => {
       if (["devices", "usage", "data"].includes(uuid)) {
+        const container = toRecord(value);
+
+        if (container) {
+          addUsageContainer(usageByDevice, container);
+        }
+
+        return;
+      }
+
+      if (isDateKey(uuid)) {
+        const deviceMap = toRecord(value);
+
+        if (deviceMap) {
+          addDateDeviceMap(usageByDevice, uuid, deviceMap);
+        }
+
         return;
       }
 

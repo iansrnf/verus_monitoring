@@ -502,6 +502,33 @@ select {
   font-weight: 800;
 }
 
+.compactButton {
+  min-height: 30px;
+  width: max-content;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.earnAppUsageDialog {
+  width: min(760px, 100%);
+}
+
+.earnAppUsageBody {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  overflow: auto;
+}
+
+.usageModalTable {
+  max-height: min(520px, 60vh);
+  overflow: auto;
+}
+
+.usageModalTable table {
+  min-width: 520px;
+}
+
 .earnAppDeleteDialog {
   width: min(620px, 100%);
 }

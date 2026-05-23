@@ -167,6 +167,10 @@ function getDeviceNameKey(value: string | null) {
   return value?.trim().toLowerCase() ?? "";
 }
 
+function getUsageMatchKey(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, "");
+}
+
 function getDeviceGroupLabel(device: EarnAppDevice) {
   const key = getDeviceIncomeKey(device.title);
 
@@ -194,6 +198,7 @@ export default function EarnAppDevicesPage() {
   const [deletingUuid, setDeletingUuid] = useState<string | null>(null);
   const [selectedDeviceUuids, setSelectedDeviceUuids] = useState<string[]>([]);
   const [selectedGroupKeys, setSelectedGroupKeys] = useState<string[]>([]);
+  const [usageModalDevice, setUsageModalDevice] = useState<EarnAppDevice | null>(null);
   const [pendingDelete, setPendingDelete] = useState<PendingDeleteSelection | null>(null);
   const [targetInvestmentId, setTargetInvestmentId] = useState<number | null>(null);
   const [incomeSaved, setIncomeSaved] = useState(false);
@@ -368,6 +373,18 @@ export default function EarnAppDevicesPage() {
 
   function getDeviceSelectionKey(device: EarnAppDevice) {
     return device.uuid || `${device.title}-${device.country}-${device.ips[0] ?? ""}`;
+  }
+
+  function getDeviceUsage(device: EarnAppDevice) {
+    const directUsage = usageByDevice[device.uuid];
+
+    if (directUsage) {
+      return directUsage;
+    }
+
+    const deviceTitleKey = getUsageMatchKey(device.title);
+
+    return Object.values(usageByDevice).find((usage) => getUsageMatchKey(usage.uuid) === getUsageMatchKey(device.uuid) || getUsageMatchKey(usage.title) === deviceTitleKey) ?? null;
   }
 
   function toggleSelectedDevice(device: EarnAppDevice) {
@@ -577,6 +594,8 @@ export default function EarnAppDevicesPage() {
   const earnedTotal = devices.reduce((total, device) => total + device.earned_total, 0);
   const zeroEarnedCount = devices.filter((device) => device.earned <= 0).length;
   const usageDeviceCount = Object.values(usageByDevice).filter((usage) => usage.points.length > 0).length;
+  const modalUsage = usageModalDevice ? getDeviceUsage(usageModalDevice) : null;
+  const modalUsagePoints = modalUsage?.points.slice().sort((first, second) => second.date.localeCompare(first.date)) ?? [];
 
   return (
     <main className="page earnAppPage">
@@ -890,7 +909,7 @@ export default function EarnAppDevicesPage() {
                 ) : (
                   visibleTableDevices.map((device, index) => {
                     const active = isEarnAppDeviceActive(device);
-                    const usage = usageByDevice[device.uuid];
+                    const usage = getDeviceUsage(device);
                     const recentUsage = usage?.points.slice(-5).reverse() ?? [];
 
                     return (
@@ -942,6 +961,9 @@ export default function EarnAppDevicesPage() {
                             ) : (
                               <span>No daily usage yet</span>
                             )}
+                            <button type="button" className="secondaryButton compactButton" onClick={() => setUsageModalDevice(device)}>
+                              View Usage
+                            </button>
                           </div>
                         </td>
                         <td>
@@ -972,6 +994,73 @@ export default function EarnAppDevicesPage() {
         </section>
         )}
       </div>
+
+      {usageModalDevice ? (
+        <div className="toolModal" role="dialog" aria-modal="true" aria-label="EarnApp usage history">
+          <button className="toolModalBackdrop" type="button" aria-label="Close usage history" onClick={() => setUsageModalDevice(null)} />
+          <div className="toolDialog earnAppUsageDialog">
+            <div className="toolModalBar">
+              <div>
+                <span>Usage History</span>
+                <strong>{usageModalDevice.title || usageModalDevice.uuid}</strong>
+              </div>
+              <button type="button" aria-label="Close usage history" onClick={() => setUsageModalDevice(null)}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="earnAppUsageBody">
+              <div className="earnAppMetrics">
+                <div>
+                  <span>Total Usage</span>
+                  <strong>{modalUsage ? formatUsage(modalUsage.totalUsage) : "-"}</strong>
+                </div>
+                <div>
+                  <span>Total Earned</span>
+                  <strong>{modalUsage ? formatUsd(modalUsage.totalEarned) : "-"}</strong>
+                </div>
+                <div>
+                  <span>Daily Records</span>
+                  <strong>{modalUsagePoints.length}</strong>
+                </div>
+                <div>
+                  <span>Last Usage</span>
+                  <strong>{modalUsagePoints[0] ? formatShortDate(modalUsagePoints[0].date) : "-"}</strong>
+                </div>
+              </div>
+
+              <div className="tableWrap usageModalTable">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Usage</th>
+                      <th>Earned</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {modalUsagePoints.length === 0 ? (
+                      <tr>
+                        <td className="empty" colSpan={3}>
+                          No usage records found for this device.
+                        </td>
+                      </tr>
+                    ) : (
+                      modalUsagePoints.map((point) => (
+                        <tr key={`${usageModalDevice.uuid}-${point.date}`}>
+                          <td>{formatDate(point.date)}</td>
+                          <td className="mono">{formatUsage(point.usage)}</td>
+                          <td className="mono">{formatUsd(point.earned)}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {pendingDelete ? (
         <div className="toolModal" role="dialog" aria-modal="true" aria-label="Confirm EarnApp delete">
