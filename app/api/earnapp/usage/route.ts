@@ -160,6 +160,19 @@ function getDateKeyedPoints(record: Record<string, unknown>) {
     .filter((point): point is UsagePoint => Boolean(point));
 }
 
+function getDateKeyedPointContainer(record: Record<string, unknown>) {
+  for (const key of ["data", "usage", "history", "daily", "days"]) {
+    const value = record[key];
+    const pointRecord = toRecord(value);
+
+    if (pointRecord && Object.keys(pointRecord).some(isDateKey)) {
+      return pointRecord;
+    }
+  }
+
+  return null;
+}
+
 function getNestedDeviceMap(record: Record<string, unknown>) {
   for (const key of ["devices", "device_usage", "usage", "data"]) {
     const value = record[key];
@@ -308,11 +321,12 @@ function normalizeUsage(data: unknown) {
         return;
       }
 
-      const uuid = getString(record, ["uuid", "device_uuid", "deviceId", "device_id", "id"]);
+      const uuid = getString(record, ["uuid", "_id", "device_uuid", "deviceId", "device_id", "id"]);
       const title = getString(record, ["title", "name", "device", "device_name"]);
       const nestedPoints = getNestedPoints(record);
       const rowDate = getString(record, ["date", "day", "dt", "time", "timestamp", "created_at"]);
       const nestedDeviceMap = rowDate ? getNestedDeviceMap(record) : null;
+      const dateKeyedPointContainer = getDateKeyedPointContainer(record);
 
       if (nestedDeviceMap) {
         addDateDeviceMap(usageByDevice, rowDate, nestedDeviceMap);
@@ -322,6 +336,8 @@ function normalizeUsage(data: unknown) {
       const points =
         nestedPoints.length > 0
           ? nestedPoints.map((point) => normalizeUsagePoint(point)).filter((point): point is UsagePoint => Boolean(point))
+          : dateKeyedPointContainer
+            ? getDateKeyedPoints(dateKeyedPointContainer)
           : getDateKeyedPoints(record);
       const directPoint = points.length === 0 ? normalizeUsagePoint(row) : null;
 
@@ -368,10 +384,12 @@ function normalizeUsage(data: unknown) {
       }
 
       const nestedPoints = getNestedPoints(record);
-      const points =
-        nestedPoints.length > 0
-          ? nestedPoints.map((point) => normalizeUsagePoint(point)).filter((point): point is UsagePoint => Boolean(point))
-          : getDateKeyedPoints(record);
+    const points =
+      nestedPoints.length > 0
+        ? nestedPoints.map((point) => normalizeUsagePoint(point)).filter((point): point is UsagePoint => Boolean(point))
+        : getDateKeyedPointContainer(record)
+          ? getDateKeyedPoints(getDateKeyedPointContainer(record) ?? {})
+        : getDateKeyedPoints(record);
 
       addDeviceUsage(
         usageByDevice,

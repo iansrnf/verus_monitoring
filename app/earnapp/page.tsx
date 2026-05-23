@@ -126,21 +126,25 @@ function formatShortDate(value: string) {
   }).format(date);
 }
 
-function formatUsage(value: number) {
+function formatUsageDuration(value: number) {
   if (!Number.isFinite(value) || value <= 0) {
     return "-";
   }
 
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  let nextValue = value;
-  let unitIndex = 0;
+  const totalSeconds = Math.floor(value / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
 
-  while (nextValue >= 1024 && unitIndex < units.length - 1) {
-    nextValue /= 1024;
-    unitIndex += 1;
+  if (hours > 0) {
+    return `${hours}h ${minutes}m ${seconds}s`;
   }
 
-  return `${nextValue >= 10 || unitIndex === 0 ? nextValue.toFixed(0) : nextValue.toFixed(1)} ${units[unitIndex]}`;
+  if (minutes > 0) {
+    return `${minutes}m ${seconds}s`;
+  }
+
+  return `${seconds}s`;
 }
 
 function isEarnAppDeviceActive(device: EarnAppDevice) {
@@ -928,7 +932,7 @@ export default function EarnAppDevicesPage() {
                             className={`iconButton usageIconButton ${usage?.points.length ? "hasUsage" : ""}`}
                             onClick={() => setUsageModalDevice(device)}
                             aria-label={`View usage history for ${device.title}`}
-                            title={`View usage history${usage?.points.length ? ` (${formatUsage(usage.totalUsage)})` : ""}`}
+                            title={`View usage history${usage?.points.length ? ` (${formatUsageDuration(usage.totalUsage)})` : ""}`}
                           >
                             <History size={16} />
                           </button>
@@ -1003,7 +1007,7 @@ export default function EarnAppDevicesPage() {
               <div className="earnAppMetrics">
                 <div>
                   <span>Total Usage</span>
-                  <strong>{modalUsage ? formatUsage(modalUsage.totalUsage) : "-"}</strong>
+                  <strong>{modalUsage ? formatUsageDuration(modalUsage.totalUsage) : "-"}</strong>
                 </div>
                 <div>
                   <span>Total Earned</span>
@@ -1039,7 +1043,7 @@ export default function EarnAppDevicesPage() {
                       modalUsagePoints.map((point) => (
                         <tr key={`${usageModalDevice.uuid}-${point.date}`}>
                           <td>{formatDate(point.date)}</td>
-                          <td className="mono">{formatUsage(point.usage)}</td>
+                          <td className="mono">{formatUsageDuration(point.usage)}</td>
                           <td className="mono">{formatUsd(point.earned)}</td>
                         </tr>
                       ))
