@@ -692,7 +692,7 @@ export default function EarnAppDevicesPage() {
           },
         ];
       })
-      .sort((first, second) => first.device.title.localeCompare(second.device.title));
+      .sort((first, second) => second.point.usage - first.point.usage || first.device.title.localeCompare(second.device.title));
   }, [getUsageDisplayDevice, query, usageByDevice, usageDate]);
   const visibleTableDevices = earnAppTab === "recommended" ? recommendedDevices : filteredDevices;
   const selectableVisibleDevices = visibleTableDevices.filter((device) => device.uuid.trim());
@@ -996,8 +996,11 @@ export default function EarnAppDevicesPage() {
                     </td>
                   </tr>
                 ) : (
-                  filteredUsageRows.map((row) => (
-                    <tr key={row.key}>
+                  filteredUsageRows.map((row) => {
+                    const isGoodUsage = row.point.usage >= EARNAPP_GOOD_USAGE_MS;
+
+                    return (
+                    <tr className={`usageDailyRow ${isGoodUsage ? "good" : "low"}`} key={row.key}>
                       <td>
                         <button
                           type="button"
@@ -1020,7 +1023,8 @@ export default function EarnAppDevicesPage() {
                       <td className="mono">{formatUsageDuration(row.point.usage)}</td>
                       <td className="mono">{formatUsd(getUsageEarned(row.point.usage))}</td>
                     </tr>
-                  ))
+                    );
+                  })
                 )}
               </tbody>
             </table>

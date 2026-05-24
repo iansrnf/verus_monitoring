@@ -437,6 +437,22 @@ select {
   min-width: 620px;
 }
 
+.usageDailyRow.good td {
+  background: rgba(52, 211, 153, 0.09);
+}
+
+.usageDailyRow.good td:first-child {
+  border-left: 3px solid rgba(52, 211, 153, 0.72);
+}
+
+.usageDailyRow.low td {
+  background: rgba(255, 107, 107, 0.09);
+}
+
+.usageDailyRow.low td:first-child {
+  border-left: 3px solid rgba(255, 107, 107, 0.72);
+}
+
 .batchActions {
   display: flex;
   align-items: center;
