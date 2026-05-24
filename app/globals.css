@@ -402,6 +402,41 @@ select {
   margin-bottom: 12px;
 }
 
+.usageFilterBar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+
+.dateField {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  border: 1px solid var(--line);
+  background: #141619;
+  border-radius: 8px;
+  padding: 0 10px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.dateField input {
+  min-height: 32px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-transform: none;
+}
+
+.usageOnlyTable table {
+  min-width: 620px;
+}
+
 .batchActions {
   display: flex;
   align-items: center;

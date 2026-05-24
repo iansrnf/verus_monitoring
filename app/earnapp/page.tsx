@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Check, FileUp, History, Pencil, RefreshCw, Save, Search, Smartphone, Trash2, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeft, CalendarDays, Check, FileUp, History, Pencil, RefreshCw, Save, Search, Smartphone, Trash2, X } from "lucide-react";
 import { LogoutButton } from "@/app/components/LogoutButton";
 import {
   EARNAPP_COOKIE_STORAGE_KEY,
@@ -41,6 +41,13 @@ type EarnAppDeviceUsage = {
   points: EarnAppUsagePoint[];
 };
 
+type EarnAppUsageRow = {
+  key: string;
+  usage: EarnAppDeviceUsage;
+  point: EarnAppUsagePoint;
+  device: EarnAppDevice;
+};
+
 type Investment = {
   id: number;
   name: string | null;
@@ -64,7 +71,7 @@ type PendingDeleteSelection = {
   devices: EarnAppDevice[];
 };
 
-type EarnAppTab = "group" | "devices" | "recommended";
+type EarnAppTab = "group" | "devices" | "recommended" | "usage";
 
 const APP_BASE_PATH = "/verus-monitoring";
 const EARNAPP_HOURLY_RATE_USD = 0.0069;
@@ -126,6 +133,35 @@ function formatShortDate(value: string) {
     month: "short",
     day: "numeric",
   }).format(date);
+}
+
+function getTodayDateInputValue() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function getUsagePointDateKey(value: string) {
+  const trimmedValue = value.trim();
+
+  if (/^\d{4}-\d{2}-\d{2}/.test(trimmedValue)) {
+    return trimmedValue.slice(0, 10);
+  }
+
+  const date = new Date(trimmedValue);
+
+  if (Number.isNaN(date.getTime())) {
+    return trimmedValue;
+  }
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
 }
 
 function formatUsageDuration(value: number) {
@@ -207,6 +243,7 @@ export default function EarnAppDevicesPage() {
   const [checkedAt, setCheckedAt] = useState<string | null>(null);
   const [usageCheckedAt, setUsageCheckedAt] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [usageDate, setUsageDate] = useState(getTodayDateInputValue);
   const [earnAppTab, setEarnAppTab] = useState<EarnAppTab>("group");
   const [loading, setLoading] = useState(false);
   const [deletingUuid, setDeletingUuid] = useState<string | null>(null);
@@ -400,6 +437,30 @@ export default function EarnAppDevicesPage() {
 
     return Object.values(usageByDevice).find((usage) => getUsageMatchKey(usage.uuid) === getUsageMatchKey(device.uuid) || getUsageMatchKey(usage.title) === deviceTitleKey) ?? null;
   }
+
+  const getUsageDisplayDevice = useCallback((usage: EarnAppDeviceUsage): EarnAppDevice => {
+    const usageUuidKey = getUsageMatchKey(usage.uuid);
+    const usageTitleKey = getUsageMatchKey(usage.title);
+    const matchingDevice = devices.find((device) => getUsageMatchKey(device.uuid) === usageUuidKey || getUsageMatchKey(device.title) === usageTitleKey);
+
+    if (matchingDevice) {
+      return matchingDevice;
+    }
+
+    return {
+      uuid: usage.uuid,
+      title: usage.title || usage.uuid || "Unnamed device",
+      rate: 0,
+      earned: 0,
+      earned_total: usage.totalEarned,
+      country: "",
+      ips: [],
+      billing: "",
+      uptime: 0,
+      total_uptime: 0,
+      raw: usage,
+    };
+  }, [devices]);
 
   function toggleSelectedDevice(device: EarnAppDevice) {
     const uuid = device.uuid.trim();
@@ -596,6 +657,43 @@ export default function EarnAppDevicesPage() {
     () => filteredDevices.filter((device) => offlineVerusDeviceNames.has(getDeviceNameKey(device.title))),
     [filteredDevices, offlineVerusDeviceNames],
   );
+  const filteredUsageRows = useMemo<EarnAppUsageRow[]>(() => {
+    const needle = query.trim().toLowerCase();
+
+    return Object.values(usageByDevice)
+      .flatMap((usage) => {
+        const point = usage.points.find((usagePoint) => getUsagePointDateKey(usagePoint.date) === usageDate);
+
+        if (!point || point.usage <= 0) {
+          return [];
+        }
+
+        const device = getUsageDisplayDevice(usage);
+        const searchableValues = [
+          device.title,
+          device.uuid,
+          usage.title,
+          usage.uuid,
+          formatUsageDuration(point.usage),
+          formatUsd(getUsageEarned(point.usage)),
+          point.date,
+        ];
+
+        if (needle && !searchableValues.some((value) => String(value).toLowerCase().includes(needle))) {
+          return [];
+        }
+
+        return [
+          {
+            key: usage.uuid || usage.title || `${point.date}-${device.title}`,
+            usage,
+            point,
+            device,
+          },
+        ];
+      })
+      .sort((first, second) => first.device.title.localeCompare(second.device.title));
+  }, [getUsageDisplayDevice, query, usageByDevice, usageDate]);
   const visibleTableDevices = earnAppTab === "recommended" ? recommendedDevices : filteredDevices;
   const selectableVisibleDevices = visibleTableDevices.filter((device) => device.uuid.trim());
   const selectedVisibleDeviceCount = selectableVisibleDevices.filter((device) => selectedDeviceUuids.includes(device.uuid)).length;
@@ -608,6 +706,7 @@ export default function EarnAppDevicesPage() {
   const earnedTotal = devices.reduce((total, device) => total + device.earned_total, 0);
   const zeroEarnedCount = devices.filter((device) => device.earned <= 0).length;
   const usageDeviceCount = Object.values(usageByDevice).filter((usage) => usage.points.length > 0).length;
+  const dailyUsageDeviceCount = filteredUsageRows.length;
   const modalUsage = usageModalDevice ? getDeviceUsage(usageModalDevice) : null;
   const modalUsagePoints = modalUsage?.points.slice().sort((first, second) => second.date.localeCompare(first.date)) ?? [];
 
@@ -779,6 +878,15 @@ export default function EarnAppDevicesPage() {
             <Trash2 size={16} aria-hidden="true" />
             <span>Recommended {recommendedDevices.length}</span>
           </button>
+          <button
+            className={`tab ${earnAppTab === "usage" ? "active" : ""}`}
+            onClick={() => setEarnAppTab("usage")}
+            role="tab"
+            aria-selected={earnAppTab === "usage"}
+          >
+            <CalendarDays size={16} aria-hidden="true" />
+            <span>Usage {dailyUsageDeviceCount}</span>
+          </button>
         </div>
 
         {earnAppTab === "group" ? (
@@ -854,6 +962,69 @@ export default function EarnAppDevicesPage() {
             </div>
             </>
           )}
+        </section>
+        ) : earnAppTab === "usage" ? (
+        <section className="earnAppSection" aria-label="EarnApp daily usage">
+          <div className="usageFilterBar">
+            <label className="dateField">
+              <CalendarDays size={17} aria-hidden="true" />
+              <span>Usage date</span>
+              <input type="date" value={usageDate} onChange={(event) => setUsageDate(event.target.value || getTodayDateInputValue())} aria-label="Filter usage by date" />
+            </label>
+          </div>
+          <div className="tableWrap earnAppTable usageOnlyTable">
+            <table>
+              <thead>
+                <tr>
+                  <th>Overall Usage</th>
+                  <th>DeviceName</th>
+                  <th>Usage</th>
+                  <th>Earned</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading && Object.keys(usageByDevice).length === 0 ? (
+                  <tr>
+                    <td className="empty" colSpan={4}>
+                      Loading EarnApp usage...
+                    </td>
+                  </tr>
+                ) : filteredUsageRows.length === 0 ? (
+                  <tr>
+                    <td className="empty" colSpan={4}>
+                      {Object.keys(usageByDevice).length > 0 ? "No devices have usage for this day." : "Paste a cookie and load devices + usage."}
+                    </td>
+                  </tr>
+                ) : (
+                  filteredUsageRows.map((row) => (
+                    <tr key={row.key}>
+                      <td>
+                        <button
+                          type="button"
+                          className="iconButton usageIconButton hasUsage"
+                          onClick={() => setUsageModalDevice(row.device)}
+                          aria-label={`View overall usage for ${row.device.title}`}
+                          title={`View overall usage (${formatUsageDuration(row.usage.totalUsage)})`}
+                        >
+                          <History size={16} />
+                        </button>
+                      </td>
+                      <td>
+                        <div className="deviceName">
+                          <strong>{row.device.title}</strong>
+                          <span>
+                            <Smartphone size={13} aria-hidden="true" /> {row.device.uuid || "-"}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="mono">{formatUsageDuration(row.point.usage)}</td>
+                      <td className="mono">{formatUsd(getUsageEarned(row.point.usage))}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </section>
         ) : (
 
