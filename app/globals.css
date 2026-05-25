@@ -453,6 +453,26 @@ select {
   border-left: 3px solid rgba(255, 107, 107, 0.72);
 }
 
+.usageDailyRow.zero td {
+  background: rgba(148, 163, 184, 0.07);
+}
+
+.usageDailyRow.zero td:first-child {
+  border-left: 3px solid rgba(148, 163, 184, 0.58);
+}
+
+.usageZeroDivider td {
+  background: #111316;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  padding: 9px 12px;
+  text-transform: uppercase;
+}
+
 .batchActions {
   display: flex;
   align-items: center;
