@@ -56,6 +56,7 @@ type Investment = {
 type VerusDevice = {
   name: string | null;
   status: boolean | null;
+  created_at?: string | null;
 };
 
 type EarnAppDeviceGroup = {
@@ -69,6 +70,7 @@ type PendingDeleteSelection = {
   key: string;
   title: string;
   devices: EarnAppDevice[];
+  requiresOfflineConfirm?: boolean;
 };
 
 type EarnAppTab = "group" | "devices" | "recommended" | "usage";
@@ -76,6 +78,7 @@ type EarnAppTab = "group" | "devices" | "recommended" | "usage";
 const APP_BASE_PATH = "/verus-monitoring";
 const EARNAPP_HOURLY_RATE_USD = 0.0069;
 const EARNAPP_GOOD_USAGE_MS = 15 * 60 * 60 * 1000;
+const LONG_OFFLINE_MS = 24 * 60 * 60 * 1000;
 
 function getAppPath(path: string) {
   return `${APP_BASE_PATH}${path}`;
@@ -133,6 +136,38 @@ function formatShortDate(value: string) {
     month: "short",
     day: "numeric",
   }).format(date);
+}
+
+function formatRelativeTime(value: string | null | undefined, referenceTime: number) {
+  if (!value) {
+    return "-";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  const diffMs = referenceTime - date.getTime();
+
+  if (diffMs < 0) {
+    return formatDate(value);
+  }
+
+  const minutes = Math.floor(diffMs / 60_000);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  if (days > 0) {
+    return `${days}d ${hours % 24}h ago`;
+  }
+
+  if (hours > 0) {
+    return `${hours}h ${minutes % 60}m ago`;
+  }
+
+  return `${minutes}m ago`;
 }
 
 function getTodayDateInputValue() {
@@ -253,6 +288,7 @@ export default function EarnAppDevicesPage() {
   const [pendingDelete, setPendingDelete] = useState<PendingDeleteSelection | null>(null);
   const [targetInvestmentId, setTargetInvestmentId] = useState<number | null>(null);
   const [incomeSaved, setIncomeSaved] = useState(false);
+  const [offlineConfirmed, setOfflineConfirmed] = useState(false);
   const [savingIncome, setSavingIncome] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const cookieFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -419,6 +455,7 @@ export default function EarnAppDevicesPage() {
     setPendingDelete(selection);
     setTargetInvestmentId(matchingInvestment?.id ?? null);
     setIncomeSaved(earnedAmount <= 0);
+    setOfflineConfirmed(!selection.requiresOfflineConfirm);
     setError(null);
   }
 
@@ -523,6 +560,11 @@ export default function EarnAppDevicesPage() {
       return;
     }
 
+    if (pendingDelete.requiresOfflineConfirm && !offlineConfirmed) {
+      setError("Confirm the Verus offline check before saving income.");
+      return;
+    }
+
     if (!targetInvestmentId) {
       setError("Choose the target expenditure before saving income.");
       return;
@@ -573,6 +615,11 @@ export default function EarnAppDevicesPage() {
       return;
     }
 
+    if (selection.requiresOfflineConfirm && !offlineConfirmed) {
+      setError("Confirm the Verus offline check before deleting this selection.");
+      return;
+    }
+
     setDeletingUuid(selection.key);
     setError(null);
 
@@ -598,6 +645,7 @@ export default function EarnAppDevicesPage() {
       setSelectedGroupKeys([]);
       setPendingDelete(null);
       setIncomeSaved(false);
+      setOfflineConfirmed(false);
       setTargetInvestmentId(null);
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : "Failed to delete EarnApp device.");
@@ -653,6 +701,15 @@ export default function EarnAppDevicesPage() {
     () => new Set(verusDevices.filter((device) => !device.status).map((device) => getDeviceNameKey(device.name)).filter(Boolean)),
     [verusDevices],
   );
+  const getMatchingVerusDevice = useCallback((device: EarnAppDevice) => {
+    const titleKey = getDeviceNameKey(device.title);
+
+    if (!titleKey) {
+      return null;
+    }
+
+    return verusDevices.find((verusDevice) => getDeviceNameKey(verusDevice.name) === titleKey) ?? null;
+  }, [verusDevices]);
   const recommendedDevices = useMemo(
     () => filteredDevices.filter((device) => offlineVerusDeviceNames.has(getDeviceNameKey(device.title))),
     [filteredDevices, offlineVerusDeviceNames],
@@ -773,6 +830,35 @@ export default function EarnAppDevicesPage() {
   const dailyUsageDeviceCount = filteredUsageRows.length + filteredZeroUsageRows.length;
   const modalUsage = usageModalDevice ? getDeviceUsage(usageModalDevice) : null;
   const modalUsagePoints = modalUsage?.points.slice().sort((first, second) => second.date.localeCompare(first.date)) ?? [];
+  const offlineCheckReferenceTime = useMemo(() => {
+    const referenceValue = checkedAt ?? usageCheckedAt;
+    const referenceTime = referenceValue ? new Date(referenceValue).getTime() : 0;
+
+    return Number.isFinite(referenceTime) ? referenceTime : 0;
+  }, [checkedAt, usageCheckedAt]);
+  const pendingDeleteOfflineChecks = useMemo(() => {
+    if (!pendingDelete) {
+      return [];
+    }
+
+    return pendingDelete.devices.map((device) => {
+      const verusDevice = getMatchingVerusDevice(device);
+      const lastSeenAt = verusDevice?.created_at ?? null;
+      const lastSeenTime = lastSeenAt ? new Date(lastSeenAt).getTime() : Number.NaN;
+      const isLongOffline = Boolean(
+        verusDevice && !verusDevice.status && Number.isFinite(lastSeenTime) && offlineCheckReferenceTime - lastSeenTime >= LONG_OFFLINE_MS,
+      );
+
+      return {
+        device,
+        verusDevice,
+        lastSeenAt,
+        isLongOffline,
+      };
+    });
+  }, [getMatchingVerusDevice, offlineCheckReferenceTime, pendingDelete]);
+  const pendingDeleteNeedsOfflineConfirm = Boolean(pendingDelete?.requiresOfflineConfirm);
+  const canProceedAfterOfflineCheck = !pendingDeleteNeedsOfflineConfirm || offlineConfirmed;
 
   return (
     <main className="page earnAppPage">
@@ -1044,18 +1130,19 @@ export default function EarnAppDevicesPage() {
                   <th>DeviceName</th>
                   <th>Usage</th>
                   <th>Earned</th>
+                  <th>Action</th>
                 </tr>
               </thead>
               <tbody>
                 {loading && Object.keys(usageByDevice).length === 0 ? (
                   <tr>
-                    <td className="empty" colSpan={4}>
+                    <td className="empty" colSpan={5}>
                       Loading EarnApp usage...
                     </td>
                   </tr>
                 ) : filteredUsageRows.length === 0 && filteredZeroUsageRows.length === 0 ? (
                   <tr>
-                    <td className="empty" colSpan={4}>
+                    <td className="empty" colSpan={5}>
                       {Object.keys(usageByDevice).length > 0 || devices.length > 0 ? "No devices match this usage date or search." : "Paste a cookie and load devices + usage."}
                     </td>
                   </tr>
@@ -1087,12 +1174,13 @@ export default function EarnAppDevicesPage() {
                         </td>
                         <td className="mono">{formatUsageDuration(row.point.usage)}</td>
                         <td className="mono">{formatUsd(getUsageEarned(row.point.usage))}</td>
+                        <td className="muted">-</td>
                       </tr>
                       );
                     })}
                     {filteredZeroUsageRows.length > 0 ? (
                       <tr className="usageZeroDivider">
-                        <td colSpan={4}>
+                        <td colSpan={5}>
                           <span>Zero Hours</span>
                         </td>
                       </tr>
@@ -1120,6 +1208,25 @@ export default function EarnAppDevicesPage() {
                         </td>
                         <td className="mono">{formatUsageDuration(row.point.usage)}</td>
                         <td className="mono">{formatUsd(getUsageEarned(row.point.usage))}</td>
+                        <td>
+                          <button
+                            type="button"
+                            className="dangerIcon"
+                            onClick={() =>
+                              openDeleteModal({
+                                key: getDeviceIncomeKey(row.device.title) || row.device.title || row.device.uuid,
+                                title: row.device.title || row.device.uuid,
+                                devices: [row.device],
+                                requiresOfflineConfirm: true,
+                              })
+                            }
+                            disabled={deletingUuid === row.device.uuid || !row.device.uuid}
+                            aria-label={`Delete zero-usage device ${row.device.title}`}
+                            title="Check Verus offline status and delete"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </>
@@ -1371,6 +1478,33 @@ export default function EarnAppDevicesPage() {
                 ))}
               </div>
 
+              {pendingDeleteNeedsOfflineConfirm ? (
+                <div className="offlineCheckPanel">
+                  <div className="offlineCheckHeader">
+                    <span>Verus Offline Check</span>
+                    <strong>Long offline means 24h+</strong>
+                  </div>
+                  <div className="offlineCheckList">
+                    {pendingDeleteOfflineChecks.map(({ device, verusDevice, lastSeenAt, isLongOffline }) => (
+                      <div className={`offlineCheckItem ${isLongOffline ? "ready" : "warning"}`} key={device.uuid || device.title}>
+                        <div>
+                          <strong>{device.title || device.uuid}</strong>
+                          <span>{verusDevice ? `Verus: ${verusDevice.name || "-"}` : "No matching Verus device"}</span>
+                        </div>
+                        <div>
+                          <span>{verusDevice?.status ? "Online" : verusDevice ? "Offline" : "Unknown"}</span>
+                          <strong>{lastSeenAt ? formatRelativeTime(lastSeenAt, offlineCheckReferenceTime) : "-"}</strong>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <label className="selectionToggle offlineConfirm">
+                    <input type="checkbox" checked={offlineConfirmed} onChange={(event) => setOfflineConfirmed(event.target.checked)} />
+                    <span>I confirm this device has been offline long enough in Verus Monitoring.</span>
+                  </label>
+                </div>
+              ) : null}
+
               {getSelectionEarned(pendingDelete) > 0 ? (
                 <label className="earnAppTargetField">
                   <span>Target Expenditure</span>
@@ -1380,7 +1514,7 @@ export default function EarnAppDevicesPage() {
                       setTargetInvestmentId(event.target.value ? Number(event.target.value) : null);
                       setIncomeSaved(false);
                     }}
-                    disabled={savingIncome || incomeSaved}
+                    disabled={savingIncome || incomeSaved || !canProceedAfterOfflineCheck}
                   >
                     <option value="">No match</option>
                     {investments.map((investment) => (
@@ -1395,7 +1529,7 @@ export default function EarnAppDevicesPage() {
               )}
 
               {getSelectionEarned(pendingDelete) > 0 ? (
-                <button type="button" className="loadConfig" onClick={() => void saveDeviceIncome()} disabled={savingIncome || incomeSaved || !targetInvestmentId}>
+                <button type="button" className="loadConfig" onClick={() => void saveDeviceIncome()} disabled={savingIncome || incomeSaved || !targetInvestmentId || !canProceedAfterOfflineCheck}>
                   {incomeSaved ? <Check size={17} /> : <Save size={17} />}
                   {incomeSaved ? "Saved" : savingIncome ? "Saving..." : "Save Income"}
                 </button>
@@ -1412,7 +1546,7 @@ export default function EarnAppDevicesPage() {
                 type="button"
                 className="loadConfig dangerButton"
                 onClick={() => void deleteEarnAppSelection(pendingDelete)}
-                disabled={deletingUuid === pendingDelete.key || (getSelectionEarned(pendingDelete) > 0 && !incomeSaved)}
+                disabled={deletingUuid === pendingDelete.key || !canProceedAfterOfflineCheck || (getSelectionEarned(pendingDelete) > 0 && !incomeSaved)}
               >
                 <Trash2 size={17} />
                 {deletingUuid === pendingDelete.key ? "Deleting..." : pendingDelete.devices.length === 1 ? "Delete Device" : "Delete Group"}

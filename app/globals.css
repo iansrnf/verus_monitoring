@@ -633,6 +633,70 @@ select {
   font-size: 12px;
 }
 
+.offlineCheckPanel {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--line);
+  background: #111316;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.offlineCheckHeader,
+.offlineCheckItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.offlineCheckHeader span,
+.offlineCheckItem span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.offlineCheckHeader strong,
+.offlineCheckItem strong {
+  display: block;
+  margin-top: 3px;
+  font-size: 13px;
+}
+
+.offlineCheckList {
+  display: grid;
+  gap: 8px;
+}
+
+.offlineCheckItem {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 9px 10px;
+}
+
+.offlineCheckItem.ready {
+  border-color: rgba(52, 211, 153, 0.42);
+  background: rgba(52, 211, 153, 0.09);
+}
+
+.offlineCheckItem.warning {
+  border-color: rgba(255, 107, 107, 0.42);
+  background: rgba(255, 107, 107, 0.09);
+}
+
+.offlineCheckItem > div {
+  min-width: 0;
+}
+
+.offlineCheckItem > div:last-child {
+  text-align: right;
+}
+
+.offlineConfirm {
+  align-items: flex-start;
+}
+
 .earnAppTargetField {
   display: grid;
   gap: 7px;
