@@ -685,6 +685,7 @@ export default function EarnAppDevicesPage() {
       setVerusPairKeyByDevice({});
       setVerusPairSearchByDevice({});
       setTargetInvestmentId(null);
+      await loadEarnAppDevices();
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : "Failed to delete EarnApp device.");
     } finally {
