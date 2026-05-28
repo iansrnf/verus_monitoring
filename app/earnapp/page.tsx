@@ -483,7 +483,7 @@ export default function EarnAppDevicesPage() {
         nextPairKeys[deviceKey] = getVerusDeviceKey(matchingVerusDevice);
       }
 
-      nextPairSearch[deviceKey] = device.title || "";
+      nextPairSearch[deviceKey] = "";
     });
 
     setPendingDelete(selection);
@@ -1568,7 +1568,7 @@ export default function EarnAppDevicesPage() {
                               <option value="">No pair</option>
                               {matchingVerusOptions.map((optionDevice) => (
                                 <option key={getVerusDeviceKey(optionDevice)} value={getVerusDeviceKey(optionDevice)}>
-                                  {getVerusDeviceLabel(optionDevice)}
+                                  {getVerusDeviceLabel(optionDevice)} - {optionDevice.status ? "Online" : "Offline"} - {optionDevice.created_at ? formatRelativeTime(optionDevice.created_at, offlineCheckReferenceTime) : "No last seen"}
                                 </option>
                               ))}
                             </select>
