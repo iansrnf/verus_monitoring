@@ -673,6 +673,7 @@ select {
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 9px 10px;
+  align-items: flex-start;
 }
 
 .offlineCheckItem.ready {
@@ -685,12 +686,57 @@ select {
   background: rgba(255, 107, 107, 0.09);
 }
 
-.offlineCheckItem > div {
+.offlineCheckInfo,
+.offlineCheckStatus {
   min-width: 0;
 }
 
-.offlineCheckItem > div:last-child {
+.offlineCheckStatus {
   text-align: right;
+  min-width: 86px;
+}
+
+.verusPairControls {
+  display: grid;
+  grid-template-columns: minmax(130px, 1fr) minmax(160px, 1.2fr);
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.verusPairControls input,
+.verusPairControls select {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid var(--line);
+  outline: 0;
+  background: #141619;
+  color: var(--text);
+  border-radius: 8px;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 12px;
+}
+
+.verusPairControls input:focus,
+.verusPairControls select:focus {
+  border-color: var(--accent);
+}
+
+@media (max-width: 640px) {
+  .offlineCheckHeader,
+  .offlineCheckItem,
+  .verusPairControls {
+    grid-template-columns: 1fr;
+  }
+
+  .offlineCheckHeader,
+  .offlineCheckItem {
+    display: grid;
+  }
+
+  .offlineCheckStatus {
+    text-align: left;
+  }
 }
 
 .offlineConfirm {

@@ -54,6 +54,7 @@ type Investment = {
 };
 
 type VerusDevice = {
+  id?: number;
   name: string | null;
   status: boolean | null;
   created_at?: string | null;
@@ -252,6 +253,24 @@ function getDeviceNameKey(value: string | null) {
   return value?.trim().toLowerCase() ?? "";
 }
 
+function getVerusDeviceKey(device: VerusDevice) {
+  return String(device.id ?? getDeviceNameKey(device.name));
+}
+
+function getVerusDeviceLabel(device: VerusDevice) {
+  return device.name?.trim() || `Device #${device.id ?? "unknown"}`;
+}
+
+function findMatchingVerusDevice(device: EarnAppDevice, verusDevices: VerusDevice[]) {
+  const titleKey = getDeviceNameKey(device.title);
+
+  if (!titleKey) {
+    return null;
+  }
+
+  return verusDevices.find((verusDevice) => getDeviceNameKey(verusDevice.name) === titleKey) ?? null;
+}
+
 function getUsageMatchKey(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, "");
 }
@@ -289,6 +308,8 @@ export default function EarnAppDevicesPage() {
   const [targetInvestmentId, setTargetInvestmentId] = useState<number | null>(null);
   const [incomeSaved, setIncomeSaved] = useState(false);
   const [offlineConfirmed, setOfflineConfirmed] = useState(false);
+  const [verusPairKeyByDevice, setVerusPairKeyByDevice] = useState<Record<string, string>>({});
+  const [verusPairSearchByDevice, setVerusPairSearchByDevice] = useState<Record<string, string>>({});
   const [savingIncome, setSavingIncome] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const cookieFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -451,11 +472,26 @@ export default function EarnAppDevicesPage() {
   function openDeleteModal(selection: PendingDeleteSelection) {
     const earnedAmount = getSelectionEarned(selection);
     const matchingInvestment = investments.find((investment) => getDeviceIncomeKey(getInvestmentName(investment)) === selection.key);
+    const nextPairKeys: Record<string, string> = {};
+    const nextPairSearch: Record<string, string> = {};
+
+    selection.devices.forEach((device) => {
+      const deviceKey = getDeviceSelectionKey(device);
+      const matchingVerusDevice = findMatchingVerusDevice(device, verusDevices);
+
+      if (matchingVerusDevice) {
+        nextPairKeys[deviceKey] = getVerusDeviceKey(matchingVerusDevice);
+      }
+
+      nextPairSearch[deviceKey] = device.title || "";
+    });
 
     setPendingDelete(selection);
     setTargetInvestmentId(matchingInvestment?.id ?? null);
     setIncomeSaved(earnedAmount <= 0);
     setOfflineConfirmed(!selection.requiresOfflineConfirm);
+    setVerusPairKeyByDevice(nextPairKeys);
+    setVerusPairSearchByDevice(nextPairSearch);
     setError(null);
   }
 
@@ -646,6 +682,8 @@ export default function EarnAppDevicesPage() {
       setPendingDelete(null);
       setIncomeSaved(false);
       setOfflineConfirmed(false);
+      setVerusPairKeyByDevice({});
+      setVerusPairSearchByDevice({});
       setTargetInvestmentId(null);
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : "Failed to delete EarnApp device.");
@@ -701,15 +739,7 @@ export default function EarnAppDevicesPage() {
     () => new Set(verusDevices.filter((device) => !device.status).map((device) => getDeviceNameKey(device.name)).filter(Boolean)),
     [verusDevices],
   );
-  const getMatchingVerusDevice = useCallback((device: EarnAppDevice) => {
-    const titleKey = getDeviceNameKey(device.title);
-
-    if (!titleKey) {
-      return null;
-    }
-
-    return verusDevices.find((verusDevice) => getDeviceNameKey(verusDevice.name) === titleKey) ?? null;
-  }, [verusDevices]);
+  const getMatchingVerusDevice = useCallback((device: EarnAppDevice) => findMatchingVerusDevice(device, verusDevices), [verusDevices]);
   const recommendedDevices = useMemo(
     () => filteredDevices.filter((device) => offlineVerusDeviceNames.has(getDeviceNameKey(device.title))),
     [filteredDevices, offlineVerusDeviceNames],
@@ -842,21 +872,40 @@ export default function EarnAppDevicesPage() {
     }
 
     return pendingDelete.devices.map((device) => {
-      const verusDevice = getMatchingVerusDevice(device);
+      const deviceKey = getDeviceSelectionKey(device);
+      const selectedVerusDeviceKey = verusPairKeyByDevice[deviceKey] ?? "";
+      const verusDevice = verusDevices.find((candidate) => getVerusDeviceKey(candidate) === selectedVerusDeviceKey) ?? getMatchingVerusDevice(device);
       const lastSeenAt = verusDevice?.created_at ?? null;
       const lastSeenTime = lastSeenAt ? new Date(lastSeenAt).getTime() : Number.NaN;
       const isLongOffline = Boolean(
         verusDevice && !verusDevice.status && Number.isFinite(lastSeenTime) && offlineCheckReferenceTime - lastSeenTime >= LONG_OFFLINE_MS,
       );
+      const searchTerm = verusPairSearchByDevice[deviceKey] ?? "";
+      const searchKey = searchTerm.trim().toLowerCase();
+      const filteredVerusOptions = verusDevices
+        .filter((candidate) => {
+          const label = getVerusDeviceLabel(candidate);
+          const statusText = candidate.status ? "online" : "offline";
+
+          return !searchKey || [label, statusText, candidate.created_at ?? ""].some((value) => String(value).toLowerCase().includes(searchKey));
+        })
+        .slice(0, 30);
+      const matchingVerusOptions =
+        verusDevice && !filteredVerusOptions.some((candidate) => getVerusDeviceKey(candidate) === getVerusDeviceKey(verusDevice))
+          ? [verusDevice, ...filteredVerusOptions]
+          : filteredVerusOptions;
 
       return {
         device,
+        deviceKey,
         verusDevice,
         lastSeenAt,
         isLongOffline,
+        searchTerm,
+        matchingVerusOptions,
       };
     });
-  }, [getMatchingVerusDevice, offlineCheckReferenceTime, pendingDelete]);
+  }, [getMatchingVerusDevice, offlineCheckReferenceTime, pendingDelete, verusDevices, verusPairKeyByDevice, verusPairSearchByDevice]);
   const pendingDeleteNeedsOfflineConfirm = Boolean(pendingDelete?.requiresOfflineConfirm);
   const canProceedAfterOfflineCheck = !pendingDeleteNeedsOfflineConfirm || offlineConfirmed;
 
@@ -1485,13 +1534,46 @@ export default function EarnAppDevicesPage() {
                     <strong>Long offline means 24h+</strong>
                   </div>
                   <div className="offlineCheckList">
-                    {pendingDeleteOfflineChecks.map(({ device, verusDevice, lastSeenAt, isLongOffline }) => (
+                    {pendingDeleteOfflineChecks.map(({ device, deviceKey, verusDevice, lastSeenAt, isLongOffline, searchTerm, matchingVerusOptions }) => (
                       <div className={`offlineCheckItem ${isLongOffline ? "ready" : "warning"}`} key={device.uuid || device.title}>
-                        <div>
+                        <div className="offlineCheckInfo">
                           <strong>{device.title || device.uuid}</strong>
-                          <span>{verusDevice ? `Verus: ${verusDevice.name || "-"}` : "No matching Verus device"}</span>
+                          <span>{verusDevice ? `Verus: ${getVerusDeviceLabel(verusDevice)}` : "No matching Verus device"}</span>
+                          <div className="verusPairControls">
+                            <input
+                              type="search"
+                              value={searchTerm}
+                              onChange={(event) => {
+                                setVerusPairSearchByDevice((currentSearch) => ({ ...currentSearch, [deviceKey]: event.target.value }));
+                                setOfflineConfirmed(false);
+                                if (getSelectionEarned(pendingDelete) > 0) {
+                                  setIncomeSaved(false);
+                                }
+                              }}
+                              placeholder="Search Verus device"
+                              aria-label={`Search Verus device for ${device.title || device.uuid}`}
+                            />
+                            <select
+                              value={verusDevice ? getVerusDeviceKey(verusDevice) : ""}
+                              onChange={(event) => {
+                                setVerusPairKeyByDevice((currentPairKeys) => ({ ...currentPairKeys, [deviceKey]: event.target.value }));
+                                setOfflineConfirmed(false);
+                                if (getSelectionEarned(pendingDelete) > 0) {
+                                  setIncomeSaved(false);
+                                }
+                              }}
+                              aria-label={`Pair Verus device for ${device.title || device.uuid}`}
+                            >
+                              <option value="">No pair</option>
+                              {matchingVerusOptions.map((optionDevice) => (
+                                <option key={getVerusDeviceKey(optionDevice)} value={getVerusDeviceKey(optionDevice)}>
+                                  {getVerusDeviceLabel(optionDevice)}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
                         </div>
-                        <div>
+                        <div className="offlineCheckStatus">
                           <span>{verusDevice?.status ? "Online" : verusDevice ? "Offline" : "Unknown"}</span>
                           <strong>{lastSeenAt ? formatRelativeTime(lastSeenAt, offlineCheckReferenceTime) : "-"}</strong>
                         </div>
