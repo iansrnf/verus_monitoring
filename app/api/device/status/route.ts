@@ -163,11 +163,11 @@ export async function POST(request: Request) {
             screen_shot = coalesce($8, screen_shot),
             created_at = $9,
             restart_count = case
-              when $10 and $11 is null then restart_count + 1
-              when $10 then greatest($11, restart_count)
+              when $10::boolean and $11::integer is null then restart_count + 1
+              when $10::boolean then greatest($11::integer, restart_count)
               else restart_count
             end,
-            restart_alarm = case when $10 then true else restart_alarm end,
+            restart_alarm = case when $10::boolean then true else restart_alarm end,
             last_restart_at = coalesce($12::timestamptz, last_restart_at),
             restart_alarm_message = coalesce($13, restart_alarm_message)
           where id = $14
@@ -202,8 +202,8 @@ export async function POST(request: Request) {
             $7,
             $8,
             $9,
-            case when $10 then coalesce($11, 1) else 0 end,
-            $10,
+            case when $10::boolean then coalesce($11::integer, 1) else 0 end,
+            $10::boolean,
             $12::timestamptz,
             $13
           )
