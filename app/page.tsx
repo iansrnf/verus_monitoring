@@ -8,6 +8,7 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
+  BellRing,
   ChevronDown,
   Clock3,
   Download,
@@ -38,6 +39,10 @@ type Device = {
   temp: string | null;
   status: boolean | null;
   screen_shot: string | null;
+  restart_count: number | null;
+  restart_alarm: boolean | null;
+  last_restart_at: string | null;
+  restart_alarm_message: string | null;
 };
 
 type DeviceWithComputedStatus = Device & {
@@ -46,9 +51,9 @@ type DeviceWithComputedStatus = Device & {
   statusLabel: string;
 };
 
-type DeviceTab = "online" | "offline" | "recent" | "group";
+type DeviceTab = "online" | "offline" | "recent" | "alarm" | "group";
 type SortDirection = "asc" | "desc";
-type SortKey = "device" | "status" | "hash" | "shares" | "cpu" | "temp" | "config" | "screenshot" | "created";
+type SortKey = "device" | "status" | "hash" | "shares" | "cpu" | "temp" | "config" | "restart" | "screenshot" | "created";
 
 type SortState = {
   key: SortKey;
@@ -122,6 +127,16 @@ function getDeviceLastSeenAt(device: Device) {
   return Number.isNaN(lastSeenAt) ? null : lastSeenAt;
 }
 
+function getDeviceRestartedAt(device: Device) {
+  if (!device.last_restart_at) {
+    return null;
+  }
+
+  const restartedAt = new Date(device.last_restart_at).getTime();
+
+  return Number.isNaN(restartedAt) ? null : restartedAt;
+}
+
 function formatRelativeTime(from: number | null, now: number) {
   if (from === null) {
     return "unknown time ago";
@@ -143,6 +158,18 @@ function formatRelativeTime(from: number | null, now: number) {
   const value = Math.floor(elapsedSeconds / unit.seconds);
 
   return `${value} ${unit.label}${value === 1 ? "" : "s"} ago`;
+}
+
+function formatRestartAlarm(device: Device, now: number) {
+  if (!device.restart_alarm && !device.restart_count) {
+    return "-";
+  }
+
+  const restartedAt = getDeviceRestartedAt(device);
+  const restartAge = restartedAt === null ? "unknown time" : formatRelativeTime(restartedAt, now);
+  const count = device.restart_count ?? 0;
+
+  return `${count} restart${count === 1 ? "" : "s"}; latest ${restartAge}`;
 }
 
 function formatHashRate(value: string | null) {
@@ -261,6 +288,8 @@ function compareDevices(firstDevice: DeviceWithComputedStatus, secondDevice: Dev
     }
     case "config":
       return compareText(firstDevice.config, secondDevice.config);
+    case "restart":
+      return compareNumbers(firstDevice.restart_count ?? null, secondDevice.restart_count ?? null);
     case "screenshot":
       return Number(Boolean(firstDevice.screen_shot)) - Number(Boolean(secondDevice.screen_shot));
     case "created":
@@ -611,6 +640,10 @@ export default function Home() {
         return isRecentlyOffline(device, now);
       }
 
+      if (deviceTab === "alarm") {
+        return Boolean(device.restart_alarm);
+      }
+
       return !device.computedOnline;
     });
 
@@ -625,6 +658,10 @@ export default function Home() {
             device.shares,
             device.cpu_core,
             device.temp,
+            device.restart_alarm ? "restart alarm" : null,
+            device.restart_count,
+            device.restart_alarm_message,
+            formatRestartAlarm(device, now),
             device.screen_shot ? "screenshot" : null,
             device.statusLabel,
           ]
@@ -662,6 +699,7 @@ export default function Home() {
   const onlineCount = uniqueDevicesWithStatus.filter((device) => device.computedOnline).length;
   const offlineCount = uniqueDevicesWithStatus.length - onlineCount;
   const recentOfflineCount = uniqueDevicesWithStatus.filter((device) => isRecentlyOffline(device, now)).length;
+  const restartAlarmCount = uniqueDevicesWithStatus.filter((device) => device.restart_alarm).length;
   const onlineHashTotal = uniqueDevicesWithStatus.reduce((total, device) => {
     if (!device.computedOnline) {
       return total;
@@ -704,6 +742,10 @@ export default function Home() {
             <div className="metric">
               <span>Offline</span>
               <strong>{offlineCount}</strong>
+            </div>
+            <div className={`metric ${restartAlarmCount > 0 ? "alarmMetric" : ""}`}>
+              <span>Restart Alarms</span>
+              <strong>{restartAlarmCount}</strong>
             </div>
             <div className="metric hashMetric" title={`Total Hash: ${formatHashRateValue(onlineHashTotal)}`}>
               <span>Total Hash</span>
@@ -853,6 +895,15 @@ export default function Home() {
                 <span>Recent {recentOfflineCount}</span>
               </button>
               <button
+                className={`tab ${deviceTab === "alarm" ? "active" : ""}`}
+                onClick={() => setDeviceTab("alarm")}
+                role="tab"
+                aria-selected={deviceTab === "alarm"}
+              >
+                <BellRing size={16} aria-hidden="true" />
+                <span>Alarm {restartAlarmCount}</span>
+              </button>
+              <button
                 className={`tab ${deviceTab === "group" ? "active" : ""}`}
                 onClick={() => setDeviceTab("group")}
                 role="tab"
@@ -862,6 +913,13 @@ export default function Home() {
                 <span>Group {deviceGroups.length}</span>
               </button>
             </div>
+
+            {restartAlarmCount > 0 ? (
+              <div className="restartNotice" role="alert">
+                <BellRing size={18} aria-hidden="true" />
+                <strong>{restartAlarmCount} device{restartAlarmCount === 1 ? "" : "s"} restarted</strong>
+              </div>
+            ) : null}
 
             {error ? <div className="notice">{error}</div> : null}
 
@@ -981,6 +1039,11 @@ export default function Home() {
                         Config {renderSortIcon("config")}
                       </button>
                     </th>
+                    <th aria-sort={sort.key === "restart" ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}>
+                      <button className="sortHeader" onClick={() => toggleSort("restart")} type="button">
+                        Restart {renderSortIcon("restart")}
+                      </button>
+                    </th>
                     <th aria-sort={sort.key === "screenshot" ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}>
                       <button className="sortHeader" onClick={() => toggleSort("screenshot")} type="button">
                         Screenshot {renderSortIcon("screenshot")}
@@ -996,13 +1059,13 @@ export default function Home() {
                 <tbody>
                   {loading ? (
                     <tr>
-                      <td className="empty" colSpan={9}>
+                      <td className="empty" colSpan={10}>
                         Loading devices...
                       </td>
                     </tr>
                   ) : filteredDevices.length === 0 ? (
                     <tr>
-                      <td className="empty" colSpan={9}>
+                      <td className="empty" colSpan={10}>
                         {query.trim() ? "No devices match your search." : "No devices found."}
                       </td>
                     </tr>
@@ -1035,6 +1098,16 @@ export default function Home() {
                         </td>
                         <td className="config" title={device.config ?? ""}>
                           <Activity size={14} aria-hidden="true" /> {device.config || "-"}
+                        </td>
+                        <td className="restartCell" title={device.restart_alarm_message ?? ""}>
+                          {device.restart_alarm ? (
+                            <span className="restartAlarm">
+                              <BellRing size={14} aria-hidden="true" />
+                              {formatRestartAlarm(device, now)}
+                            </span>
+                          ) : (
+                            <span className="muted">{device.restart_count ? `${device.restart_count} restarts` : "-"}</span>
+                          )}
                         </td>
                         <td>
                           {device.screen_shot ? (

@@ -93,9 +93,9 @@ select {
 
 .summary {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 10px;
-  width: min(680px, 100%);
+  width: min(820px, 100%);
 }
 
 .metric {
@@ -116,6 +116,11 @@ select {
   color: var(--muted);
   font-size: 12px;
   text-transform: uppercase;
+}
+
+.alarmMetric {
+  border-color: rgba(251, 191, 36, 0.6);
+  background: rgba(251, 191, 36, 0.12);
 }
 
 .metric strong {
@@ -1144,6 +1149,23 @@ select {
   color: var(--text);
 }
 
+.restartNotice {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  width: fit-content;
+  margin: 0 0 14px;
+  border: 1px solid rgba(251, 191, 36, 0.65);
+  background: rgba(251, 191, 36, 0.13);
+  color: #fde68a;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.restartNotice svg {
+  flex: 0 0 auto;
+}
+
 .tableWrap {
   overflow: hidden;
   border: 1px solid var(--line);
@@ -1245,6 +1267,27 @@ tr:last-child td {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.restartCell {
+  max-width: 210px;
+}
+
+.restartAlarm {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 100%;
+  color: #fde68a;
+  font-size: 13px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.restartAlarm svg {
+  flex: 0 0 auto;
 }
 
 .screenshotButton {

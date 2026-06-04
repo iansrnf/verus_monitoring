@@ -27,6 +27,14 @@ export async function GET() {
   const staleBefore = new Date(Date.now() - STALE_DEVICE_MS).toISOString();
 
   try {
+    await postgresPool.query(`
+      alter table device
+        add column if not exists restart_count integer not null default 0,
+        add column if not exists restart_alarm boolean not null default false,
+        add column if not exists last_restart_at timestamp with time zone,
+        add column if not exists restart_alarm_message text
+    `);
+
     await postgresPool.query(
       `
         update device
@@ -49,6 +57,10 @@ export async function GET() {
         cpu_core,
         temp,
         status,
+        restart_count,
+        restart_alarm,
+        last_restart_at,
+        restart_alarm_message,
         encode(screen_shot, 'base64') as screen_shot
       from device
       order by created_at desc nulls last

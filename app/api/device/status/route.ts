@@ -13,6 +13,10 @@ type DeviceStatusRequest = {
   temp?: unknown;
   screen_shot?: unknown;
   screenShot?: unknown;
+  restart_event?: unknown;
+  restartEvent?: unknown;
+  restart_count?: unknown;
+  restartCount?: unknown;
 };
 
 function stringifyMetric(value: unknown) {
@@ -41,6 +45,18 @@ function parseIntegerMetric(value: unknown) {
   }
 
   return 0;
+}
+
+function parseOptionalBoolean(value: unknown) {
+  return typeof value === "boolean" ? value : null;
+}
+
+function parseOptionalIntegerMetric(value: unknown) {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  return parseIntegerMetric(value);
 }
 
 function parseScreenshot(value: unknown) {
@@ -92,19 +108,35 @@ export async function POST(request: Request) {
 
   const screenshot = parseScreenshot(body.screen_shot ?? body.screenShot);
   const screenshotReceived = Boolean(screenshot?.length);
+  const status = parseOptionalBoolean(body.status);
+  const restartEvent = Boolean(body.restart_event ?? body.restartEvent);
+  const restartCount = parseOptionalIntegerMetric(body.restart_count ?? body.restartCount);
+  const updatedAt = new Date().toISOString();
   const payload = [
     name,
-    Boolean(body.status),
+    status,
     stringifyMetric(body.hash),
     typeof body.config === "string" ? body.config : "",
     stringifyMetric(body.shares),
     parseIntegerMetric(body.cpu_core ?? body.cpu),
     stringifyMetric(body.temp),
     screenshot,
-    new Date().toISOString(),
+    updatedAt,
+    restartEvent,
+    restartCount,
+    restartEvent ? updatedAt : null,
+    restartEvent ? `Device restarted${restartCount === null ? "" : ` ${restartCount} time${restartCount === 1 ? "" : "s"}`}.` : null,
   ];
 
   try {
+    await postgresPool.query(`
+      alter table device
+        add column if not exists restart_count integer not null default 0,
+        add column if not exists restart_alarm boolean not null default false,
+        add column if not exists last_restart_at timestamp with time zone,
+        add column if not exists restart_alarm_message text
+    `);
+
     const existingDevice = await postgresPool.query<{ id: number }>(
       `
         select id
@@ -122,23 +154,59 @@ export async function POST(request: Request) {
           update device
           set
             name = $1,
-            status = $2,
-            hash = $3,
-            config = $4,
-            shares = $5,
-            cpu_core = $6,
-            temp = $7,
+            status = coalesce($2, status),
+            hash = case when $3 = '' then hash else $3 end,
+            config = case when $4 = '' then config else $4 end,
+            shares = case when $5 = '' then shares else $5 end,
+            cpu_core = case when $6 = 0 then cpu_core else $6 end,
+            temp = case when $7 = '' then temp else $7 end,
             screen_shot = coalesce($8, screen_shot),
-            created_at = $9
-          where id = $10
+            created_at = $9,
+            restart_count = case
+              when $10 and $11 is null then restart_count + 1
+              when $10 then greatest($11, restart_count)
+              else restart_count
+            end,
+            restart_alarm = case when $10 then true else restart_alarm end,
+            last_restart_at = coalesce($12::timestamptz, last_restart_at),
+            restart_alarm_message = coalesce($13, restart_alarm_message)
+          where id = $14
         `,
         [...payload, existingDevice.rows[0].id],
       );
     } else {
       await postgresPool.query(
         `
-          insert into device (name, status, hash, config, shares, cpu_core, temp, screen_shot, created_at)
-          values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          insert into device (
+            name,
+            status,
+            hash,
+            config,
+            shares,
+            cpu_core,
+            temp,
+            screen_shot,
+            created_at,
+            restart_count,
+            restart_alarm,
+            last_restart_at,
+            restart_alarm_message
+          )
+          values (
+            $1,
+            coalesce($2, false),
+            $3,
+            $4,
+            $5,
+            $6,
+            $7,
+            $8,
+            $9,
+            case when $10 then coalesce($11, 1) else 0 end,
+            $10,
+            $12::timestamptz,
+            $13
+          )
         `,
         payload,
       );
