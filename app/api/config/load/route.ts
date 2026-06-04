@@ -23,6 +23,8 @@ export async function POST(request: Request) {
   }
 
   try {
+    await postgresPool.query("alter table my_config add column if not exists threads integer not null default 6");
+
     const existingConfig = await postgresPool.query<{ id: number }>(
       `
         select id
@@ -38,14 +40,15 @@ export async function POST(request: Request) {
       await postgresPool.query(
         `
           update my_config
-          set url = $1, port = $2, wallet = $3, password = $4, created_at = $5
-          where id = $6
+          set url = $1, port = $2, wallet = $3, password = $4, threads = $5, created_at = $6
+          where id = $7
         `,
         [
           selectedConfig.url,
           selectedConfig.port,
           selectedConfig.wallet,
           selectedConfig.password,
+          selectedConfig.threads,
           updatedAt,
           existingConfig.rows[0].id,
         ],
@@ -53,10 +56,10 @@ export async function POST(request: Request) {
     } else {
       await postgresPool.query(
         `
-          insert into my_config (url, port, wallet, password, created_at)
-          values ($1, $2, $3, $4, $5)
+          insert into my_config (url, port, wallet, password, threads, created_at)
+          values ($1, $2, $3, $4, $5, $6)
         `,
-        [selectedConfig.url, selectedConfig.port, selectedConfig.wallet, selectedConfig.password, updatedAt],
+        [selectedConfig.url, selectedConfig.port, selectedConfig.wallet, selectedConfig.password, selectedConfig.threads, updatedAt],
       );
     }
   } catch (error) {

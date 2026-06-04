@@ -15,9 +15,11 @@ export async function GET(request: Request) {
   }
 
   try {
+    await postgresPool.query("alter table my_config add column if not exists threads integer not null default 6");
+
     const { rows } = await postgresPool.query(
       `
-        select url, port, wallet, password
+        select url, port, wallet, password, threads
         from my_config
         order by created_at asc nulls last, id asc
         limit 1

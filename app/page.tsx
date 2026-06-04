@@ -65,6 +65,7 @@ type ServerConfig = {
   port: string | null;
   wallet: string | null;
   password: string | null;
+  threads: number | null;
 };
 
 type ScreenshotPreview = {
@@ -797,6 +798,10 @@ export default function Home() {
                   <dt>Password</dt>
                   <dd>{miningConfigs[Number(selectedConfigIndex)].password || "-"}</dd>
                 </div>
+                <div>
+                  <dt>CPU</dt>
+                  <dd>{miningConfigs[Number(selectedConfigIndex)].threads} cores</dd>
+                </div>
               </dl>
 
               {configMessage ? <p className="configMessage">{configMessage}</p> : null}
@@ -827,6 +832,10 @@ export default function Home() {
                   <div>
                     <dt>Password</dt>
                     <dd>{serverConfig.password || "-"}</dd>
+                  </div>
+                  <div>
+                    <dt>CPU</dt>
+                    <dd>{serverConfig.threads ?? 6} cores</dd>
                   </div>
                 </dl>
               ) : (
